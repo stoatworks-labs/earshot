@@ -13,6 +13,7 @@ constexpr double kPrimeFraction = 0.125;   ///< pattern v0.1.1
 constexpr double kFloorSeconds  = 1.0;
 constexpr double kAbsoluteFloor = 1e-4;    ///< pattern's: flux below this is never an onset
 constexpr double kGapSeconds    = 1.0;     ///< a longer frame interval re-primes
+constexpr double kHostRatio     = 3.0;     ///< pattern's: flux over three times its floor is an onset
 constexpr double kLogFloorHz    = 20.0;
 } // namespace
 
@@ -138,7 +139,7 @@ void HostAnalyser::frame( double hostSeconds, const float* bins, int count, cons
 	{
 		State& s = bands_[ b ];
 		s.level  = std::sqrt( energy[ b ] );
-		const double threshold = std::max( kAbsoluteFloor, s.floor * (double)config.onsetRatio );
+		const double threshold = std::max( kAbsoluteFloor, s.floor * kHostRatio );
 		const bool   over      = flux[ b ] > threshold;
 		const bool   rising    = mut.onsetNoRisingEdge || !s.above;   // a crossing, as on the audio path
 		const bool   armed     = t - s.lastFire >= (double)config.onsetRefractory;

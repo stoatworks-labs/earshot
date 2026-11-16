@@ -31,6 +31,15 @@
 	harmonic scores (a2^2 - a1^2)/(a1^2 + a2^2) at T/2, which stays under 0.9
 	until the fundamental is 13 dB below it.
 
+	**Band, in two passes.** The NSDF's noise-times-noise term grows with the
+	noise bandwidth: white noise at 10 dB SNR put 17 cents of error on a
+	110 Hz sine analysed full band. So pass one runs on the mono sum
+	low-passed at 2.5 x pitchMaxHz (fourth-order Butterworth, 5 kHz by
+	default), and pass two again with the cut at 8 x the pitch pass one found;
+	pass two replaces pass one only if they agree within 50 cents, so it can
+	refine but never change the answer. The confidence is therefore S/(S+N)
+	with N the noise in the band the answer came from.
+
 	**Window.** Three periods of the lowest pitch (75 ms at 40 Hz): the lag
 	search needs at least two periods of overlap at the longest lag. The
 	estimate describes the window as a whole, so it trails the newest sample
@@ -51,15 +60,23 @@ public:
 	/// Samples of history this configuration needs at `fs`.
 	int windowFor( int fs, const Config& config ) const noexcept;
 
-	/// `mono` is the newest windowFor() samples.
-	void analyse( const float* mono, int n, int fs, const Config& config, const testing::Mutations& mut,
+	/// `mono` holds `warm` samples of history, then the newest `n` (= windowFor()).
+	void analyse( const float* mono, int n, int warm, int fs, const Config& config, const testing::Mutations& mut,
 				  const Fft& fft, Pitch& out ) noexcept;
+
+	/// History the low-pass wants before the window.
+	static constexpr int kWarm = 256;
 
 	/// The NSDF of the last analysis, for the harness.
 	const float* nsdf() const noexcept { return nsdf_.data(); }
 
 private:
 	void spectralPeak( int n, int fs, const Config& config, const Fft& fft, Pitch& out ) noexcept;
+	/// Low-pass (mono - mean) into x_; `energy` gets sum(x_^2) over the window.
+	void lowPass( const float* mono, int n, int warm, double mean, double fc, int fs, double& energy ) noexcept;
+	/// NSDF of x_, key maxima, MPM's choice, parabolic refinement.
+	bool estimate( int n, double energy, int fs, double minHz, double maxHz, const testing::Mutations& mut,
+				   const Fft& fft, double& lag, double& peak ) noexcept;
 
 	float                                minHzFloor_ = 40.0f;
 	int                                  maxWindow_  = 0;

@@ -11,9 +11,10 @@ namespace earshot
 namespace
 {
 constexpr double kWindowSeconds  = 0.0213;   ///< 1024 samples at 48 kHz
-constexpr double kLogKneeDb      = -70.0;    ///< log(1 + g|X|) turns logarithmic above this
+constexpr double kLogKneeDb      = -110.0;   ///< log(1 + g|X|) turns logarithmic above this (per bin, re a full-scale sine)
 constexpr double kFloorSeconds   = 1.0;      ///< the running mean's time constant (pattern's)
-constexpr double kPrimeFraction  = 0.125;    ///< of the band's log level: the floor's seed (pattern v0.1.1)
+constexpr int    kFloorHopsMax   = 1 << 20;  ///< cap on the hop count (any value over a second of hops)
+constexpr double kQuietSeconds   = 0.05;     ///< after a (re)start the detector only measures for this long
 constexpr double kAbsoluteFloor  = 1.0;      ///< flux never counts below this: a -65 dBFS sine appearing
 constexpr double kRegisterLowHz  = 400.0;    ///< tempo registers: pattern's split
 constexpr double kRegisterHighHz = 5000.0;
@@ -41,6 +42,8 @@ bool BandAnalyser::init( int maxRate ) noexcept
 		logMag_.assign( (size_t)n / 2 + 1, 0.0f );
 		prevLogMag_.assign( (size_t)n / 2 + 1, 0.0f );
 		power_.assign( (size_t)n / 2 + 1, 0.0 );
+		prevPower_.assign( (size_t)n / 2 + 1, 0.0 );
+		binFlux_.assign( (size_t)n / 2 + 1, 0.0f );
 	}
 	catch( ... )
 	{
@@ -172,42 +175,73 @@ void BandAnalyser::hop( uint64_t endSample, const Config& config, const testing:
 	if( first )
 	{
 		for( int k = 0; k <= half; ++k )
+		{
 			prevLogMag_[ (size_t)k ] = mut.onsetNoPrime ? 0.0f : logMag_[ (size_t)k ];
+			prevPower_[ (size_t)k ]  = mut.onsetNoPrime ? 0.0 : power_[ (size_t)k ];
+		}
+	}
+
+	// Each bin's rise is measured against the LARGEST of its own and its two
+	// neighbours' previous values (Boeck & Widmer, "Maximum filter vibrato
+	// suppression for onset detection", DAFx 2013). A bin that only holds
+	// noise dips towards zero and climbs back at random, and in the log domain
+	// that climb is a large, heavy-tailed "rise": with three-bin bands at the
+	// bottom of the spectrum it was enough to fire on a steady mix. A real
+	// onset rises above its neighbours' old values too.
+	for( int k = 0; k <= half; ++k )
+	{
+		float ref = prevLogMag_[ (size_t)k ];
+		if( !mut.onsetPlainFlux )
+		{
+			if( k > 0 )
+				ref = std::max( ref, prevLogMag_[ (size_t)( k - 1 ) ] );
+			if( k < half )
+				ref = std::max( ref, prevLogMag_[ (size_t)( k + 1 ) ] );
+		}
+		binFlux_[ (size_t)k ] = std::max( 0.0f, logMag_[ (size_t)k ] - ref );
 	}
 
 	// Tempo registers read every bin, whatever the user's bands.
 	double reg[ 3 ] = { 0.0, 0.0, 0.0 };
 	for( int k = 1; k < half; ++k )
-	{
-		const double rise = std::max( 0.0f, logMag_[ (size_t)k ] - prevLogMag_[ (size_t)k ] );
-		reg[ k < regLo_ ? 0 : ( k < regHi_ ? 1 : 2 ) ] += rise;
-	}
+		reg[ k < regLo_ ? 0 : ( k < regHi_ ? 1 : 2 ) ] += binFlux_[ (size_t)k ];
 
 	double energy[ kMaxBands ], flux[ kMaxBands ], logLevel[ kMaxBands ], rise[ kMaxBands ];
-	double maxRise = 0.0;
+	double maxChange = 0.0;
 	for( int b = 0; b < bandCount_; ++b )
 	{
 		const State& s = bands_[ b ];
-		double e = 0.0, f = 0.0, l = 0.0;
+		double e = 0.0, f = 0.0, l = 0.0, up = 0.0;
 		for( int k = s.binLo; k < s.binHi; ++k )
 		{
-			e += power_[ (size_t)k ];
-			f += std::max( 0.0f, logMag_[ (size_t)k ] - prevLogMag_[ (size_t)k ] );
+			const double p  = power_[ (size_t)k ];
+			const double pp = prevPower_[ (size_t)k ];
+			e += p;
+			f += binFlux_[ (size_t)k ];
 			l += logMag_[ (size_t)k ];
+			up += std::max( 0.0, p - pp );
 		}
 		energy[ b ]   = e * toMs;
 		flux[ b ]     = f;
 		logLevel[ b ] = l;
+		// The masking gate compares energy that moved up, bin by bin (a kick
+		// can rise in one bin while a bass note's phase takes energy out of
+		// the next, and the band total would call that no rise at all).
 		const bool comparable = s.primed || ( first && mut.onsetNoPrime );
-		const double prevE    = ( first && mut.onsetNoPrime ) ? 0.0 : s.prevEnergy;
-		rise[ b ] = comparable ? std::max( 0.0, energy[ b ] - prevE ) : 0.0;
-		maxRise   = std::max( maxRise, rise[ b ] );
+		rise[ b ] = comparable ? up * toMs : 0.0;
+		maxChange = std::max( maxChange, rise[ b ] );
 	}
 
 	const double floorAlpha = dsp::onePoleAlpha( dt, kFloorSeconds );
+	const int    floorHops  = std::max( 1, (int)std::lround( kFloorSeconds / dt ) );
 	const double attack     = dsp::onePoleAlpha( dt, config.envelopeAttack );
 	const double release    = dsp::onePoleAlpha( dt, config.envelopeRelease );
 	const double maskRatio  = std::pow( 10.0, -config.onsetMaskDb / 10.0 );
+	// Nothing fires on a rise smaller than an onsetGateDb sine: the first hop
+	// that catches an attack may hold only its first half millisecond, a
+	// sliver at -100 dB whose spectrum is as wide as the band plan, and on a
+	// silent band log flux turns even that into a crossing.
+	const double gateMs     = std::pow( 10.0, config.onsetGateDb / 10.0 );
 
 	for( int b = 0; b < bandCount_; ++b )
 	{
@@ -216,30 +250,42 @@ void BandAnalyser::hop( uint64_t endSample, const Config& config, const testing:
 
 		if( !s.primed && !( first && mut.onsetNoPrime ) )
 		{
-			// Prime: nothing fires, the floor is seeded, the envelope starts at
-			// the level rather than rising from silence.
-			s.meanFlux   = ( mut.onsetFullSeed ? 1.0 : kPrimeFraction ) * logLevel[ b ];
+			// Prime: nothing fires, the envelope starts at the level rather
+			// than rising from silence, and the floor starts empty: it is the
+			// plain average of the flux seen so far until a second of hops
+			// has passed (then the 1 s exponential), so it is right within a
+			// few hops whatever the signal. pattern v0.1.1 seeded it with an
+			// eighth of the band's level instead -- calibrated for linear
+			// magnitude flux, it is ten times too high for log flux and made
+			// the first kick at 250 ms inaudible (estest --onset-prime).
+			s.meanFlux   = mut.onsetFullSeed ? logLevel[ b ] : 0.0;
+			s.devFlux    = 0.0;
+			s.hops       = mut.onsetFullSeed ? kFloorHopsMax : 0;
 			s.prevFlux   = 0.0;
 			s.prevEnergy = energy[ b ];
 			s.envelope   = s.level;
 			s.primed     = true;
 			s.above      = false;
+			s.quiet      = std::max( 1, (int)std::ceil( kQuietSeconds / dt ) );
 			continue;
 		}
 		if( first && mut.onsetNoPrime )
 		{
 			s.meanFlux = 0.0;
+			s.devFlux  = 0.0;
+			s.hops     = kFloorHopsMax;
 			s.prevFlux = 0.0;
 			s.primed   = true;
 			s.above    = false;
+			s.quiet    = 0;
 		}
 
-		const double threshold = std::max( kAbsoluteFloor, (double)config.onsetRatio * s.meanFlux );
+		const double threshold = std::max( kAbsoluteFloor, s.meanFlux + (double)config.onsetDeviations * s.devFlux );
 		const bool   over      = flux[ b ] > threshold;
 		const bool   rising    = mut.onsetNoRisingEdge || !s.above;
-		const bool   armed     = t - s.lastFire >= (double)config.onsetRefractory;
-		const bool   masked    = !mut.onsetNoMask && rise[ b ] < maxRise * maskRatio;
-		s.above = over;
+		const bool   armed     = t - s.lastFire >= (double)config.onsetRefractory && s.quiet == 0;
+		const bool   masked    = ( !mut.onsetNoMask && rise[ b ] < maxChange * maskRatio ) || 2.0 * rise[ b ] < gateMs;
+		s.above = over && !masked;   // a masked hop does not use up the crossing
 		if( over && rising && armed && !masked )
 		{
 			s.onset    = true;
@@ -249,14 +295,24 @@ void BandAnalyser::hop( uint64_t endSample, const Config& config, const testing:
 			s.lastFire = t;
 		}
 
-		s.meanFlux += ( flux[ b ] - s.meanFlux ) * floorAlpha;
+		// The floor: a plain average until a second of hops, then the 1 s one-pole.
+		if( s.hops < kFloorHopsMax )
+			++s.hops;
+		const double w = s.hops < floorHops ? 1.0 / s.hops : floorAlpha;
+		s.devFlux += ( std::fabs( flux[ b ] - s.meanFlux ) - s.devFlux ) * w;
+		s.meanFlux += ( flux[ b ] - s.meanFlux ) * w;
+		if( s.quiet > 0 )
+			--s.quiet;
 		s.prevFlux   = flux[ b ];
 		s.prevEnergy = energy[ b ];
 		s.envelope += ( s.level - s.envelope ) * ( s.level > s.envelope ? attack : release );
 	}
 
 	for( int k = 0; k <= half; ++k )
+	{
 		prevLogMag_[ (size_t)k ] = logMag_[ (size_t)k ];
+		prevPower_[ (size_t)k ]  = power_[ (size_t)k ];
+	}
 	havePrev_ = true;
 
 	if( tempo != nullptr )

@@ -186,9 +186,12 @@ struct Config
 	int   bandCount = 4;
 	float bandEdges[ kMaxBands + 1 ] = { 30.0f, 150.0f, 600.0f, 4000.0f, 16000.0f, 0, 0, 0, 0 };
 
-	float onsetRatio      = 3.0f;    ///< flux over its running mean to count as an onset
+	float onsetDeviations = 12.0f;   ///< an onset's flux is this many mean absolute deviations over
+	                                 ///< the flux's running mean. Steady music's flux is heavy-tailed,
+	                                 ///< hence a figure that would be absurd for Gaussian noise (AGENTS.md)
 	float onsetMaskDb     = 30.0f;   ///< a band whose energy rise is this far below the
 	                                 ///< strongest band's in the same hop cannot fire
+	float onsetGateDb     = -80.0f;  ///< a band cannot fire on an energy rise smaller than a sine this loud
 	float onsetRefractory = 0.05f;   ///< seconds, per band
 	float envelopeAttack  = 0.005f;  ///< seconds
 	float envelopeRelease = 0.150f;  ///< seconds

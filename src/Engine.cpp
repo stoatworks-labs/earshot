@@ -38,7 +38,7 @@ Config sanitise( Config c, const Config& fixed )
 	c.bandCount   = std::max( 1, std::min( c.bandCount, kMaxBands ) );
 	for( int b = 1; b <= c.bandCount; ++b )
 		c.bandEdges[ b ] = std::max( c.bandEdges[ b ], c.bandEdges[ b - 1 ] + 1.0f );
-	c.onsetRatio      = std::max( 1.0f, c.onsetRatio );
+	c.onsetDeviations = std::max( 0.5f, c.onsetDeviations );
 	c.onsetRefractory = std::max( 0.0f, c.onsetRefractory );
 	c.tapRate         = std::max( WaveTap::kMinRate, std::min( c.tapRate, WaveTap::kMaxRate ) );
 	return c;
@@ -137,7 +137,7 @@ struct Engine::Impl
 		const int pitchWindow = pitch.windowFor( kMaxSampleRate, config );
 		const int partialWindow = PartialTracker::windowFor( kMaxSampleRate );
 		const int stereoWindow  = StereoMeter::windowFor( kMaxSampleRate );
-		maxWindow = std::max( pitchWindow, std::max( partialWindow, stereoWindow ) );
+		maxWindow = std::max( pitchWindow + PitchDetector::kWarm, std::max( partialWindow, stereoWindow ) );
 		if( !fft.init( std::max( dsp::nextPow2( 2 * pitchWindow ), partialWindow ) ) )
 			return false;
 		try
@@ -255,35 +255,45 @@ struct Engine::Impl
 		}
 	}
 
-	/// The newest-window analyses: pitch, partials, stereo.
+	/// The newest-window analyses: pitch, partials, stereo. Each runs as soon
+	/// as its own window has arrived: pitch needs 75 ms, partials 170 ms, and
+	/// the pitch must not wait for the partials.
 	void windows() noexcept
 	{
 		const int pitchN   = pitch.windowFor( fs, config );
 		const int partialN = PartialTracker::windowFor( fs );
 		const int stereoN  = StereoMeter::windowFor( fs );
-		const int need     = std::min( maxWindow, std::max( pitchN, std::max( partialN, stereoN ) ) );
 		const uint64_t delay = (uint64_t)std::max( 0.0, mut.pitchLagDelay * fs );
 		const uint64_t end   = readPos > delay ? readPos - delay : 0;
+		const int      want  = std::min( maxWindow, std::max( pitchN + PitchDetector::kWarm, std::max( partialN, stereoN ) ) );
+		const int      have  = (int)std::min< uint64_t >( end, (uint64_t)want );
 
 		frame.pitch = Pitch();
 		frame.partialCount = 0;
 		frame.stereo = Stereo();
-		if( end < (uint64_t)need || !capture.ring().read( end - need, (size_t)need, win.data(), epoch ) )
+		const int shortest = std::min( pitchN, std::min( partialN, stereoN ) );
+		if( have < shortest || !capture.ring().read( end - (uint64_t)have, (size_t)have, win.data(), epoch ) )
 			return;
 		const int ch = channels;
 		const int l  = std::min( config.pairFirst, ch - 1 );
 		const int r  = std::min( config.pairFirst + 1, ch - 1 );
-		for( int i = 0; i < need; ++i )
+		for( int i = 0; i < have; ++i )
 		{
 			winL[ (size_t)i ] = win[ (size_t)i * ch + l ];
 			winR[ (size_t)i ] = win[ (size_t)i * ch + r ];
 			winM[ (size_t)i ] = 0.5f * ( winL[ (size_t)i ] + winR[ (size_t)i ] );
 		}
-		pitch.analyse( winM.data() + ( need - pitchN ), pitchN, fs, config, mut, fft, frame.pitch );
-		partials.analyse( winM.data() + ( need - partialN ), partialN, fs, frame.pitch, mut, fft, frame.partials,
-						  frame.partialCount );
-		StereoMeter::analyse( winL.data() + ( need - stereoN ), winR.data() + ( need - stereoN ), stereoN, ch == 1, mut,
-							  frame.stereo );
+		if( have >= pitchN )
+		{
+			const int warm = std::min( PitchDetector::kWarm, have - pitchN );
+			pitch.analyse( winM.data() + ( have - pitchN - warm ), pitchN, warm, fs, config, mut, fft, frame.pitch );
+		}
+		if( have >= partialN )
+			partials.analyse( winM.data() + ( have - partialN ), partialN, fs, frame.pitch, mut, fft, frame.partials,
+							  frame.partialCount );
+		if( have >= stereoN )
+			StereoMeter::analyse( winL.data() + ( have - stereoN ), winR.data() + ( have - stereoN ), stereoN, ch == 1,
+								  mut, frame.stereo );
 	}
 
 	void clearDeviceResults() noexcept

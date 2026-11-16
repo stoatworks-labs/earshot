@@ -41,7 +41,8 @@ struct Mutations
 	bool onsetFullSeed      = false; ///< pattern v0.1.0's seed: the floor starts at the band's whole level
 	bool onsetSnapZeroDt    = false; ///< host path: a repeated host time snaps the floor (alpha = 1)
 	bool onsetNoMask        = false; ///< no masking gate: a hard attack's click lights every band
-	bool onsetNoRisingEdge  = false; ///< fire whenever flux is over threshold, rising or not
+	bool onsetNoRisingEdge  = false; ///< fire on every hop over the threshold, not once per crossing
+	bool onsetPlainFlux     = false; ///< each bin against its own previous value (no maximum filter)
 	bool bandNoParseval     = false; ///< band level without the window's energy correction
 
 	// Tempo
