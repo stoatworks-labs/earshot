@@ -20,14 +20,15 @@ namespace estest
 // eps * log2(n) (Higham, "Accuracy and Stability of Numerical Algorithms",
 // 2nd ed., section 24.1); eps = 6e-8, so at n = 4096 that is ~7e-7. The check
 // allows 1e-5 relative to the transform's RMS, about 15x that, and the
-// negative control (the inverse used as the forward, i.e. the twiddles
-// conjugated) misses by order 1.
+// in-check control (the inverse used as the forward, i.e. the twiddles
+// conjugated) misses by order 1. Negative control: the twiddle table built
+// by a float running-angle recurrence (spasis measured it and rejected it).
 //---------------------------------------------------------------------------
 
-void checkFft( Report& rep, const Run&, const Mutations& )
+void checkFft( Report& rep, const Run&, const Mutations& mut )
 {
 	earshot::Fft fft;
-	fft.init( 4096 );
+	fft.init( 4096, mut.fftFloatTwiddles );
 	Rng rng( 7 );
 	for( int n : { 16, 256, 4096 } )
 	{

@@ -65,7 +65,7 @@ if [ -x "$ESTEST" ]; then
 	fi
 	if [ $QUICK -eq 0 ]; then
 		"$ESTEST" --negative >"$LOG/negative.log" 2>&1 && s=PASS || s=FAIL
-		record "negative controls" $s "$(last "$LOG/negative.log" '^negative:')"
+		record "negative controls" $s "$(last "$LOG/negative.log" '^negative:'); $(last "$LOG/negative.log" '^coverage:')"
 	else
 		record "negative controls" SKIP "--quick"
 	fi

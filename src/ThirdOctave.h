@@ -70,6 +70,7 @@ public:
 	{
 		Section sec[ kMaxOrder ];
 		int     sections = 3;
+		bool    single   = false;   ///< the thirdFloatArithmetic negative control only
 		double  exactHz = 0, loHz = 0, hiHz = 0;
 		float   nominalHz = 0;
 
@@ -78,12 +79,29 @@ public:
 		void clear() noexcept;
 		double process( double x ) noexcept
 		{
+			if( single )
+				return processSingle( x );
 			for( int i = 0; i < sections; ++i )
 			{
 				Section&     s = sec[ i ];
 				const double y = s.b0 * x + s.s1;
 				s.s1           = s.b1 * x - s.a1 * y + s.s2;
 				s.s2           = s.b2 * x - s.a2 * y;
+				x              = y;
+			}
+			return x;
+		}
+		/// The same sections in float, coefficients and state: the classic
+		/// low-frequency biquad bug, which only the negative control runs.
+		double processSingle( double xd ) noexcept
+		{
+			float x = (float)xd;
+			for( int i = 0; i < sections; ++i )
+			{
+				Section&    s  = sec[ i ];
+				const float y  = (float)s.b0 * x + (float)s.s1;
+				s.s1           = (float)s.b1 * x - (float)s.a1 * y + (float)s.s2;
+				s.s2           = (float)s.b2 * x - (float)s.a2 * y;
 				x              = y;
 			}
 			return x;
@@ -121,6 +139,7 @@ private:
 	int        fs_     = 0;
 	double     alpha_  = 0.0;   ///< per-sample one-pole for 125 ms
 	bool       primed_ = false;
+	bool       noHold_ = false;   ///< the thirdNoHold negative control only
 };
 
 } // namespace earshot

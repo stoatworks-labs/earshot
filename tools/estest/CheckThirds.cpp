@@ -138,7 +138,18 @@ const float kNominal[ 31 ] = { 20, 25, 31.5f, 40, 50, 63, 80, 100, 125, 160, 200
 	weighting forgets at only 34.7 dB a second, so at 1.5 s that ring still
 	read 0.8 dB into a -78 dB skirt reading; at 3 s it is 100 dB down. This is what
 	proves the skirts are the skirts of the running filters, not just of a
-	design function.
+	design function. Negative control: the sections run in float.
+
+	thirds.ballistics -- a 1 kHz sine for 2 s, then digital silence. The Fast
+	level's decay, fitted from 50 to 400 ms after the cut, must be
+	10 lg(e) / 0.125 s = 34.74 dB/s within 0.1 dB/s: IEC 61672-1 defines
+	time weighting F by that 125 ms time constant, and the per-sample
+	one-pole is an exact exponential, so the bound only has to cover the
+	least-squares fit on float levels (the 1 kHz band's own ring is over
+	100 dB down by 50 ms). The peak hold must stay flat for thirdHoldSeconds
+	after its last peak (within one frame plus one block) and then fall at
+	thirdFallDbPerSecond within 0.1 dB/s. Negative controls: time weighting S
+	(1 s), and a hold that falls at once.
 */
 void checkThirds( Report& rep, const Run& run, const Mutations& mut )
 {
@@ -298,6 +309,59 @@ void checkThirds( Report& rep, const Run& run, const Mutations& mut )
 		rep.add( "thirds.sines", cell, worstExcess <= 0.0, "%d band readings against the coefficients' response; worst: %s",
 				 compared, worstAt.c_str() );
 		rep.figure( "thirds end-to-end error, worst (dB)", worstErr );
+	}
+
+	//-- thirds.ballistics ----------------------------------------------------
+	{
+		const double cut = 2.0;
+		Signal       s   = silence( run.fs, 4.5 );
+		addBurst( s, 1000.0, 0.5, 0.0, cut, 0.001, 0.0 );
+		const Config cfg;
+		Driver       d( run, cfg, mut );
+		std::vector< double > ft, fdb, fhold;
+		d.play( widen( s, 2 ), [ & ]( const Frame& f, double ) {
+			for( int i = 0; i < f.thirdCount; ++i )
+				if( f.thirds[ i ].nominalHz == 1000.0f )
+				{
+					ft.push_back( d.fedSeconds() );
+					fdb.push_back( f.thirds[ i ].db );
+					fhold.push_back( f.thirds[ i ].holdDb );
+				}
+		} );
+		auto slope = [ & ]( const std::vector< double >& y, double from, double to ) {
+			double n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+			for( size_t i = 0; i < ft.size(); ++i )
+				if( ft[ i ] >= from && ft[ i ] <= to )
+				{
+					n += 1;
+					sx += ft[ i ];
+					sy += y[ i ];
+					sxx += ft[ i ] * ft[ i ];
+					sxy += ft[ i ] * y[ i ];
+				}
+			return n > 2 ? ( n * sxy - sx * sy ) / ( n * sxx - sx * sx ) : 0.0;
+		};
+		const double fastWant = 10.0 * std::log10( std::exp( 1.0 ) ) / 0.125;
+		const double fast     = -slope( fdb, cut + 0.05, cut + 0.40 );
+		// The hold: its last rise before the fall, and the first frame it fell.
+		double peakAt = -1.0, fallAt = -1.0;
+		for( size_t i = 1; i < ft.size(); ++i )
+		{
+			if( fhold[ i ] > fhold[ i - 1 ] || ( ft[ i ] < cut && fhold[ i ] == fdb[ i ] ) )
+				peakAt = ft[ i ];
+			if( ft[ i ] > cut && fallAt < 0.0 && fhold[ i ] < fhold[ i - 1 ] )
+				fallAt = ft[ i ];
+		}
+		const double held     = fallAt - peakAt;
+		const double slack    = 1.0 / run.fps + (double)run.block / run.fs;
+		const double fall     = fallAt > 0.0 ? -slope( fhold, fallAt + 0.05, fallAt + 0.5 ) : 0.0;
+		const bool   fastOk   = std::fabs( fast - fastWant ) <= 0.1;
+		const bool   holdOk   = peakAt > 0.0 && fallAt > 0.0 && held >= cfg.thirdHoldSeconds - 1e-9 && held <= cfg.thirdHoldSeconds + slack + 1e-6;
+		const bool   fallOk   = std::fabs( fall - cfg.thirdFallDbPerSecond ) <= 0.1;
+		rep.add( "thirds.ballistics", cell, ft.size() > 100 && fastOk && holdOk && fallOk,
+				 "1 kHz band after a cut: Fast decay %.3f dB/s (want %.3f +-0.1); hold %.3f s after its last peak (want %.3f..%.3f); then falls %.3f dB/s (want %.1f +-0.1)",
+				 fast, fastWant, held, (double)cfg.thirdHoldSeconds, cfg.thirdHoldSeconds + slack, fall, (double)cfg.thirdFallDbPerSecond );
+		rep.figure( "thirds Fast decay error (dB/s)", std::fabs( fast - fastWant ) );
 	}
 }
 

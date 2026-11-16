@@ -49,6 +49,7 @@ void CaptureCore::begin( int sampleRate, int nativeChannels ) noexcept
 	ring_.reset( std::max( 1, std::min( nativeChannels, maxChannels_ ) ) );
 	native_.store( nativeChannels, std::memory_order_relaxed );
 	zeroRun_.store( 0, std::memory_order_relaxed );
+	silentLatch_.store( false, std::memory_order_relaxed );
 	lost_.store( false, std::memory_order_relaxed );
 	rate_.store( sampleRate, std::memory_order_release );
 }
@@ -67,6 +68,12 @@ void CaptureCore::deliver( const float* in, uint32_t frames, int native ) noexce
 	{
 		for( size_t i = 0; i < total && !any; ++i )
 			any = std::fabs( in[ i ] ) >= 1e-4f;
+	}
+	else if( mut != nullptr && mut->silentOnPair )
+	{
+		const int kept = std::min( ring_.channels(), native );
+		for( size_t i = 0; i < total && !any; ++i )
+			any = (int)( i % (size_t)native ) < kept && in[ i ] != 0.0f;
 	}
 	else
 	{
@@ -102,6 +109,8 @@ void CaptureCore::deliver( const float* in, uint32_t frames, int native ) noexce
 
 void CaptureCore::lost() noexcept
 {
+	if( mut != nullptr && mut->captureLostIgnored )
+		return;
 	lost_.store( true, std::memory_order_release );
 	wake_.notify_all();
 }
@@ -140,6 +149,20 @@ void CaptureCore::select( const char* name ) noexcept
 	}
 	guard.unlock();
 	wake_.notify_all();
+
+	if( mut != nullptr && mut->captureOpenInline )
+	{
+		// The negative control: spasis's open, which the caller waited for.
+		for( int i = 0; i < 5000; ++i )
+		{
+			{
+				std::lock_guard< std::mutex > g( lock_ );
+				if( !changed_ && std::strcmp( requested_, current_ ) == 0 && state() != CaptureState::Opening )
+					break;
+			}
+			std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
+		}
+	}
 }
 
 void CaptureCore::feedBegin( int sampleRate, int channels ) noexcept
@@ -199,8 +222,13 @@ CaptureState CaptureCore::state() const noexcept
 {
 	const CaptureState s = (CaptureState)state_.load( std::memory_order_acquire );
 	const bool         never = mut != nullptr && mut->silentNever;
-	if( s == CaptureState::Running && !never && silentSeconds() >= kSilenceTimeout )
+	const bool         latch = mut != nullptr && mut->silentLatched;
+	if( s == CaptureState::Running && !never && ( silentSeconds() >= kSilenceTimeout || ( latch && silentLatch_.load() ) ) )
+	{
+		if( latch )
+			silentLatch_.store( true );
 		return CaptureState::Silent;
+	}
 	return s;
 }
 
@@ -237,7 +265,9 @@ void CaptureCore::worker() noexcept
 		setState( CaptureState::Opening );
 		char opened[ 128 ] = {}, error[ 160 ] = {};
 		lk.unlock();
-		const testing::OpenResult result = backend_->open( target, *this, opened, error );
+		testing::OpenResult result = backend_->open( target, *this, opened, error );
+		if( result == testing::OpenResult::NotConnected && mut != nullptr && mut->captureMissingToDefault )
+			result = backend_->open( kDefaultDevice, *this, opened, error );   // the negative control: what spasis forbids
 		lk.lock();
 		switch( result )
 		{
@@ -306,7 +336,8 @@ void CaptureCore::worker() noexcept
 						[ & ] { return quit_ || changed_ || lost_.load(); } );
 	}
 	lk.unlock();
-	closeDevice();
+	if( mut == nullptr || !mut->captureNoCloseOnDestroy )
+		closeDevice();
 }
 
 } // namespace earshot

@@ -22,8 +22,10 @@ namespace earshot
 class Fft
 {
 public:
-	/// Allocates. `maxSize` must be a power of two.
-	bool init( int maxSize ) noexcept;
+	/// Allocates. `maxSize` must be a power of two. `floatRecurrence` builds
+	/// the table by a float running-angle recurrence: the harness's negative
+	/// control (fftFloatTwiddles) only.
+	bool init( int maxSize, bool floatRecurrence = false ) noexcept;
 	int  maxSize() const noexcept { return maxSize_; }
 
 	/// In place. `n` a power of two, 2 <= n <= maxSize.

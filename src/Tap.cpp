@@ -61,7 +61,7 @@ void WaveTap::setRates( int fs, int tapRate, const testing::Mutations& mut ) noe
 	tapRate_ = std::max( kMinRate, std::min( tapRate, std::min( kMaxRate, fs ) ) );
 	// The negative control puts the cutoff at the INPUT's Nyquist: the kernel
 	// then only interpolates, and everything above the tap's Nyquist folds in.
-	const double fc = mut.tapNoAntiAlias ? 0.45 * fs : 0.4 * tapRate_;
+	const double fc = mut.tapNoAntiAlias ? 0.45 * fs : ( mut.tapCutoffQuarter ? 0.25 : 0.4 ) * tapRate_;
 	scale_  = 2.0 * fc / fs;
 	halfIn_ = kZeroCrossings / scale_;
 	reset();

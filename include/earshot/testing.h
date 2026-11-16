@@ -27,6 +27,9 @@ namespace testing
 
 struct Mutations
 {
+	// FFT
+	bool fftFloatTwiddles   = false; ///< twiddles by a float running-angle recurrence (spasis measured ~20 dB lost)
+
 	// Pitch
 	bool pitchGlobalMax     = false; ///< take the highest NSDF peak, not MPM's first key maximum within 0.9
 	bool pitchSpectralPeak  = false; ///< report the strongest FFT peak as the pitch
@@ -41,36 +44,58 @@ struct Mutations
 	bool onsetFullSeed      = false; ///< pattern v0.1.0's seed: the floor starts at the band's whole level
 	bool onsetSnapZeroDt    = false; ///< host path: a repeated host time snaps the floor (alpha = 1)
 	bool onsetNoMask        = false; ///< no masking gate: a hard attack's click lights every band
+	bool onsetMaskWinnerOnly = false; ///< the masking gate lets only the band with the largest rise fire
 	bool onsetNoRisingEdge  = false; ///< fire on every hop over the threshold, not once per crossing
 	bool onsetPlainFlux     = false; ///< each bin against its own previous value (no maximum filter)
+	bool onsetFullWave      = false; ///< flux and the masking gate count falls as well as rises
+	bool onsetLinearFlux    = false; ///< linear magnitude flux on the audio path (pattern's), not log
 	bool bandNoParseval     = false; ///< band level without the window's energy correction
+	bool envelopeOneRate    = false; ///< the envelope falls at the attack rate
 
 	// Tempo
 	bool tempoLegacy        = false; ///< pattern v0.1.0: raw summed flux, best lag, a half at 70 %
 	bool tempoNoOnsetGate   = false; ///< take readings with no onsets in the window
+	bool tempoSlowestLevel  = false; ///< the slowest family member within 70 % wins, not the fastest
 
 	// Thirds
 	bool thirdOrder2        = false; ///< second-order prototype instead of third
 	bool thirdFixedOrder    = false; ///< third order everywhere, even where warping breaks the skirt
 	bool thirdBase2         = false; ///< G = 2 instead of 10^(3/10)
 	bool thirdNoPrewarp     = false; ///< bilinear transform without pre-warping the band edges
+	bool thirdFloatArithmetic = false; ///< run the sections in float (coefficients and state)
+	bool thirdSlowWeighting = false; ///< time weighting S (1 s) instead of F (125 ms)
+	bool thirdNoHold        = false; ///< the peak hold starts falling at once
 
 	// Stereo
 	bool stereoSwap         = false; ///< left and right exchanged
 	bool stereoNoNormalise  = false; ///< correlation = sum(LR) / N, not normalised
+	bool stereoWidthSideOverMid = false; ///< width = side energy / mid energy, clamped to 1
+	bool stereoMonoLeftOnly = false; ///< a one-channel stream metered as left with a silent right
 
 	// Tap
 	bool tapPeekLatest      = false; ///< hand out the newest window each call instead of a stream
 	bool tapNoAntiAlias     = false; ///< interpolate without the low-pass
+	bool tapCutoffQuarter   = false; ///< the anti-alias cutoff at a quarter of the tap rate (a "safe" margin)
 
 	// Capture
 	bool silentByLevel      = false; ///< call |x| < 1e-4 silence, not bit-exact zero
 	bool silentNever        = false; ///< never report Silent
+	bool silentLatched      = false; ///< once Silent, stay Silent until the device is reopened
+	bool silentOnPair       = false; ///< judge zeros on the sliced channels, not the raw device buffer
 	bool configureClears    = false; ///< configure() clears the ring and re-primes everything
 	bool ringNoValidate     = false; ///< trust a copy without re-checking the write cursor
+	bool ringNoEpoch        = false; ///< a reader's epoch is not checked: a reset stream's old reads succeed
+	bool captureOpenInline  = false; ///< selectDevice() waits for the open (spasis's render-thread open)
+	bool captureMissingToDefault = false; ///< a missing device is swapped for the system default
+	bool captureLostIgnored = false; ///< a device that stops on its own is not noticed (stays Running)
+	bool captureRateFixed   = false; ///< a new stream's sample rate is not followed
+	bool captureNoCloseOnDestroy = false; ///< the worker exits without closing the device
+	bool allocPerFrame      = false; ///< update() allocates (and frees) a scratch block every frame
 
 	// Fallback
 	bool fallbackInventsPitch = false; ///< host path fills pitch from the loudest bin
+	bool fallbackOnSilent   = false; ///< host bins stand in for a Silent device too (hiding it)
+	bool hostPowerAsMagnitude = false; ///< Power-law bins used as magnitudes (not square-rooted)
 };
 
 /// What a backend calls while a device runs. Engine owns it.

@@ -56,6 +56,7 @@ struct Script
 	std::atomic< bool >     askedDefault{ false };
 	std::atomic< uint64_t > deliverAllocations{ 0 };
 	std::atomic< bool >     loseNow{ false };
+	std::atomic< bool >     destroyedOpen{ false };   ///< the backend was destroyed with its stream running
 	std::mutex              namesLock;
 	std::vector< std::string > names;
 };
@@ -64,7 +65,15 @@ class ScriptedBackend final : public et::CaptureBackend
 {
 public:
 	explicit ScriptedBackend( std::shared_ptr< Script > s ) : s_( std::move( s ) ) {}
-	~ScriptedBackend() override { close(); }
+	/// Records, rather than hides, a device still running when the backend is
+	/// destroyed: the Engine must have closed it first (the device callback
+	/// writes into the Engine). It is then stopped, so the test can go on.
+	~ScriptedBackend() override
+	{
+		if( thread_.joinable() )
+			s_->destroyedOpen = true;
+		close();
+	}
 
 	et::OpenResult open( const char* name, et::AudioSink& sink, char* openedName, char* error ) noexcept override
 	{
@@ -185,9 +194,10 @@ uint32_t onsetTotal( const Frame& f )
 //   not a dead device: never Silent. Negative control: a level threshold
 //   (|x| < 1e-4) instead of bit-exact zero.
 // silent.recovery -- 4 s of zeros (Silent), then a tone: Running on the
-//   first frame whose audio holds it.
+//   first frame whose audio holds it. Negative control: Silent latches.
 // silent.raw -- four channels, the pair on 0 and 1, both zero, a tone on
-//   channel 3: judged on the raw device buffer, so never Silent.
+//   channel 3: judged on the raw device buffer, so never Silent. Negative
+//   control: zeros judged on the kept channels only.
 //---------------------------------------------------------------------------
 
 void checkSilent( Report& rep, const Run& run, const Mutations& mut )
@@ -251,7 +261,9 @@ void checkSilent( Report& rep, const Run& run, const Mutations& mut )
 // ring.race -- a writer thread streams frames whose samples encode their own
 //   index (blocks of 1..700 frames, 0.3 s flat out); the reader takes windows
 //   anywhere in the readable range. Every accepted read must hold exactly
-//   the frames asked for. A reset makes a reader's old epoch fail.
+//   the frames asked for. A reset makes a reader's old epoch fail, even
+//   once the same frame numbers have been written again (so only the epoch
+//   can refuse it). Negative control: the epoch is not checked.
 // ring.lapped -- the reader aims at the oldest frames, which the writer is
 //   about to overwrite. Some reads must be refused, and no accepted read may
 //   be torn. Negative control: trust the copy without re-checking the claim.
@@ -336,14 +348,16 @@ void checkRing( Report& rep, const Run& run, const Mutations& mut )
 		float buf[ 64 * 2 ] = {};
 		ring.write( buf, 64 );
 		const uint32_t e = ring.epoch();
-		const bool     before = ring.read( 0, 64, buf, e );
+		const bool     before = ring.read( 0, 64, buf, e, validate, !mut.ringNoEpoch );
 		ring.reset( 2 );
-		const bool after = ring.read( 0, 64, buf, e );
-		const bool ok    = r.torn == 0 && r.accepted > 1000 && before && !after;
+		ring.write( buf, 64 );   // the same frame numbers exist again: only the epoch tells them apart
+		const bool after    = ring.read( 0, 64, buf, e, validate, !mut.ringNoEpoch );
+		const bool afterNew = ring.read( 0, 64, buf, ring.epoch(), validate, !mut.ringNoEpoch );
+		const bool ok       = r.torn == 0 && r.accepted > 1000 && before && !after && afterNew;
 		rep.add( "ring.race", cell, ok,
 				 "%llu frames written by a racing thread; %llu reads accepted, %llu torn (must be 0), %llu refused; old epoch after reset: %s",
 				 (unsigned long long)r.written, (unsigned long long)r.accepted, (unsigned long long)r.torn, (unsigned long long)r.refused,
-				 after ? "ACCEPTED" : "refused" );
+				 after ? "ACCEPTED" : ( afterNew ? "refused" : "refused, but so is the new one" ) );
 	}
 	{
 		const RingResult r  = raceRing( true, validate );
@@ -459,9 +473,11 @@ void checkParams( Report& rep, const Run& run, const Mutations& mut )
 //   Nyquist (linear) or 20 Hz * (Nyquist / 20 Hz)^((j + 0.5)/64) (log), and a
 //   single bin's energy lands in the band holding that centre; Power values
 //   are square-rooted. Expected bands computed here from those formulas.
+//   Negative control: Power bins used as magnitudes.
 // fallback.down -- a named device that is Missing: host bins stand in
 //   (fallbackWhenDeviceDown); with it off, nothing. A Silent device: never the
-//   host (the operator must see the device is dead).
+//   host (the operator must see the device is dead). Negative control: the
+//   host stands in for a Silent device too.
 //---------------------------------------------------------------------------
 
 void checkFallback( Report& rep, const Run& run, const Mutations& mut )
@@ -580,6 +596,7 @@ void checkFallback( Report& rep, const Run& run, const Mutations& mut )
 			Config c;
 			c.hostBins.value = earshot::HostBins::Value::Power;
 			Engine e( c, nullptr );
+			e.mutations()     = mut;
 			float  bins[ 64 ] = {};
 			bins[ 0 ]         = 0.25f;   // power 0.25 is magnitude 0.5
 			const Frame& f    = e.update( 1.0, bins, 64 );
@@ -620,18 +637,27 @@ void checkFallback( Report& rep, const Run& run, const Mutations& mut )
 // Capture: the device worker, against a scripted backend, in real time.
 //
 // capture.slowopen -- the device takes 300 ms to open: selectDevice()
-//   returns in under 5 ms, no update() in the first second takes over 5 ms,
-//   the state goes Opening -> Running, the host bins stand in while it
-//   opens, and audio flows once Running.
+//   returns, and no update() in the first second takes, over 100 ms; the
+//   state goes Opening -> Running, the host bins stand in while it opens,
+//   and audio flows once Running. Why 100 ms: a caller that waited for the
+//   open would take the whole 300 ms, and a third of it separates the two
+//   on a busy machine. The unloaded figures are 0.01 ms and 0.7 ms; one
+//   update took 31 ms on this Mac with other builds and a release running
+//   (wall time measures the scheduler too). Negative control: selectDevice()
+//   waits for the open.
 // capture.missing -- "Dante 1-2" is not connected, then is: Missing (with
 //   the reason in Status::error), retried, Running after one retry period
-//   (2 s, +-0.5 s). The default device is never asked for.
+//   (2 s, +-0.5 s). The default device is never asked for. Negative control:
+//   a missing device swapped for the default.
 // capture.lost -- a running device is unplugged: Missing within 0.25 s,
 //   back to Running after the retry, as a new stream (generation moves).
+//   Negative control: the stop is not noticed.
 // capture.rate -- a device at 44.1 kHz replaces one at 48: sampleRate
 //   follows, the generation moves, the third-octave bank drops to 30 bands.
+//   Negative control: the first rate is kept.
 // capture.destructor -- an Engine destroyed with a device running closes it
-//   and returns within 1 s.
+//   before its backend goes, and returns within 1 s. Negative control: the
+//   worker exits without closing.
 //---------------------------------------------------------------------------
 
 void checkCapture( Report& rep, const Run&, const Mutations& mut )
@@ -668,9 +694,9 @@ void checkCapture( Report& rep, const Run&, const Mutations& mut )
 			audioAt1s = f.audioTime;
 			sleepMs( 1000.0 / 60.0 );
 		}
-		const bool ok = selectMs < 5.0 && worstMs < 5.0 && sawOpening && hostWhileOpening && runningAt >= 0.29 && runningAt < 0.6 && audioAt1s > 0.3;
+		const bool ok = selectMs < 100.0 && worstMs < 100.0 && sawOpening && hostWhileOpening && runningAt >= 0.29 && runningAt < 0.6 && audioAt1s > 0.3;
 		rep.add( "capture.slowopen", cell, ok,
-				 "300 ms open: selectDevice %.2f ms, worst update %.2f ms (limits 5), Opening seen %s with host bins %s, Running at %.3f s, %.2f s of audio by 1 s",
+				 "300 ms open: selectDevice %.2f ms, worst update %.2f ms (limits 100), Opening seen %s with host bins %s, Running at %.3f s, %.2f s of audio by 1 s",
 				 selectMs, worstMs, sawOpening ? "yes" : "NO", hostWhileOpening ? "yes" : "NO", runningAt, audioAt1s );
 		rep.figure( "capture: worst update() during a 300 ms open (ms)", worstMs );
 	}
@@ -767,9 +793,10 @@ void checkCapture( Report& rep, const Run&, const Mutations& mut )
 			const double a = wallSeconds();
 			e.reset();
 			const double ms = ( wallSeconds() - a ) * 1000.0;
-			const bool   ok = ms < 1000.0 && script->closes.load() == script->opens.load();
-			rep.add( "capture.destructor", cell, ok, "Engine destroyed with a device running: returned in %.1f ms, %d opens, %d closes", ms, script->opens.load(),
-					 script->closes.load() );
+			const bool   ok = ms < 1000.0 && script->closes.load() == script->opens.load() && !script->destroyedOpen;
+			rep.add( "capture.destructor", cell, ok,
+					 "Engine destroyed with a device running: returned in %.1f ms, %d opens, %d closes, closed before the backend went: %s", ms,
+					 script->opens.load(), script->closes.load(), script->destroyedOpen ? "NO" : "yes" );
 		}
 		rep.figure( "capture: allocations in the device callback", (double)script->deliverAllocations.load() );
 	}
@@ -781,6 +808,7 @@ void checkCapture( Report& rep, const Run&, const Mutations& mut )
 // update() (and readTap) counted on its own thread by estest's operator new.
 // The control proves the counter counts: one deliberate new inside a counted
 // region must read 1. (The device callback is counted in capture.*.)
+// Negative control: update() allocates and frees a block every frame.
 //---------------------------------------------------------------------------
 
 void checkAlloc( Report& rep, const Run& run, const Mutations& mut )

@@ -29,11 +29,13 @@ using earshot::Stereo;
 //   rmsL and rmsR within 1e-5 of A / sqrt 2. Negative control: sides swapped.
 // stereo.width -- mono 0, anti-phase 1, hard pan 0.5 (1e-5); independent
 //   noise 0.5 within 4 / sqrt(N) (width = (1 - r) / 2 for equal levels).
+//   Negative control: side over mid energy.
 // stereo.pair -- four channels, pairFirst = 2: the meter reads channels 2
 //   and 3 (distinct tones on 0..3), so the balance and levels are 2's and
 //   3's. Negative control: sides swapped.
 // stereo.mono -- a one-channel stream: mono set, correlation 1, width 0,
-//   balance 0.
+//   balance 0. Negative controls: not normalised; metered as left with a
+//   silent right.
 //---------------------------------------------------------------------------
 
 namespace
@@ -151,7 +153,8 @@ void checkStereo( Report& rep, const Run& run, const Mutations& mut )
 //   6 dB for the table and float). Negative control: no anti-alias filter.
 // tap.passband -- 100, 1000 and 2000 Hz: gain within 0.005 dB of unity
 //   (ripple 9e-5 is 0.0008 dB; 2 kHz is 0.25 R, inside the passband, which
-//   ends near 0.3 R for this kernel).
+//   ends near 0.3 R for this kernel). Negative control: the cutoff at a
+//   quarter of the tap rate.
 //---------------------------------------------------------------------------
 
 namespace

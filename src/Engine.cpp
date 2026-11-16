@@ -117,6 +117,7 @@ struct Engine::Impl
 	std::vector< float > win, winL, winR, winM;
 	mutable std::vector< float > peek;
 	int maxWindow = 0;
+	void* volatile allocSink = nullptr;   // the allocPerFrame negative control only
 
 	bool init( const Config& c, std::unique_ptr< testing::CaptureBackend > backend ) noexcept
 	{
@@ -195,7 +196,7 @@ struct Engine::Impl
 		channels  = capture.ring().channels();
 		readPos   = 0;
 		const int rate = capture.sampleRate();
-		if( rate != fs )
+		if( rate != fs && !( mut.captureRateFixed && fs > 0 ) )
 		{
 			fs = rate;
 			bands.setRate( fs );
@@ -307,11 +308,17 @@ struct Engine::Impl
 
 	const Frame& update( double hostSeconds, const float* hostFft, int hostFftCount ) noexcept
 	{
+		if( mut.allocPerFrame )
+		{
+			// A direct ::operator new: a new-expression may be elided.
+			allocSink = ::operator new( 64 );
+			::operator delete( allocSink );
+		}
 		applyPending();
 		const CaptureState st = capture.state();
 		frame.capture = st;
 
-		const bool up = st == CaptureState::Running || st == CaptureState::Silent;
+		const bool up = st == CaptureState::Running || ( st == CaptureState::Silent && !mut.fallbackOnSilent );
 		const uint32_t e = capture.ring().epoch();
 		if( up && ( e & 1u ) == 0 )
 		{
@@ -334,7 +341,8 @@ struct Engine::Impl
 			following = false;
 			clearDeviceResults();
 			const bool useHost = hostFft != nullptr && hostFftCount > 0 &&
-								 ( st == CaptureState::Closed || ( config.fallbackWhenDeviceDown && st != CaptureState::Silent ) );
+								 ( st == CaptureState::Closed ||
+								   ( config.fallbackWhenDeviceDown && ( st != CaptureState::Silent || mut.fallbackOnSilent ) ) );
 			if( useHost )
 			{
 				host.frame( hostSeconds, hostFft, hostFftCount, config, mut );

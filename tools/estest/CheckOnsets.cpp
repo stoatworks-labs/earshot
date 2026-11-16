@@ -207,7 +207,7 @@ void checkOnsetPrime( Report& rep, const Run& run, const Mutations& mut )
 //   band fires within one window plus one hop, and no band beyond the reach
 //   fires. Negative control: no gate.
 // onset.attack.release -- the same bursts end with a 50 ms release: nothing
-//   fires.
+//   fires. Negative control: flux that counts falls as well as rises.
 // onset.attack.cut -- bursts that stop dead (1 ms release): the cut clicks
 //   like an attack, its splatter rising in bands the note never touched.
 //   Nothing beyond the reach may fire. (An ending can fire within its
@@ -215,7 +215,8 @@ void checkOnsetPrime( Report& rep, const Run& run, const Mutations& mut )
 // onset.attack.once -- with the refractory at 0, one onset per attack.
 //   Negative control: fire on every hop over the threshold.
 // onset.attack.soft -- 30 and 80 ms raised-cosine rises: one onset each, in
-//   its own band, nothing beyond the reach.
+//   its own band, nothing beyond the reach. Negative control: pattern's
+//   linear magnitude flux on the audio path.
 //---------------------------------------------------------------------------
 
 void checkOnsetAttack( Report& rep, const Run& run, const Mutations& mut )
@@ -410,7 +411,8 @@ void checkOnsetAttack( Report& rep, const Run& run, const Mutations& mut )
 // overlap between frames.
 // bands.envelope: the attack and release one-poles, timed on frames. The
 // bound is the time constant plus the window (the level itself takes a
-// window to change) plus one video frame (when we look).
+// window to change) plus one video frame (when we look). Negative control:
+// the envelope falls at the attack rate.
 //---------------------------------------------------------------------------
 
 void checkBands( Report& rep, const Run& run, const Mutations& mut )

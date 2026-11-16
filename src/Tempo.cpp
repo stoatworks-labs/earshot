@@ -214,13 +214,17 @@ void TempoTracker::detect() noexcept
 		top              = std::max( top, scores[ count ] );
 		++count;
 	}
-	double best = family;
-	for( int i = 0; i < count; ++i )   // ascending lag: the first to pass is the fastest
+	double     best    = family;
+	const bool slowest = mut != nullptr && mut->tempoSlowestLevel;   // the negative control
+	for( int k = 0; k < count; ++k )   // ascending lag: the first to pass is the fastest
+	{
+		const int i = slowest ? count - 1 - k : k;
 		if( scores[ i ] >= kLevelRatio * top )
 		{
 			best = members[ i ];
 			break;
 		}
+	}
 
 	const double peak = peakNear( r, maxLag, best );
 	readings_++;

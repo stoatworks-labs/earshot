@@ -63,7 +63,7 @@ void HostAnalyser::frame( double hostSeconds, const float* bins, int count, cons
 		// A host may hand back a negative or a NaN in a buffer it has not filled
 		// yet; either would poison the floors for good (pattern, needle).
 		const double clean = v > 0.0f ? (double)v : 0.0;
-		m[ j ] = config.hostBins.value == HostBins::Value::Power ? std::sqrt( clean ) : clean;
+		m[ j ] = config.hostBins.value == HostBins::Value::Power && !mut.hostPowerAsMagnitude ? std::sqrt( clean ) : clean;
 		if( m[ j ] > loudest )
 		{
 			loudest    = m[ j ];

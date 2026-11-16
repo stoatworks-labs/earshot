@@ -84,40 +84,71 @@ struct NegativeCase
 	/// filter's benefit depends on where a band's bins fall): it must fail in
 	/// at least one cell, and the report says it is a partial catch.
 	bool                                anyCell = false;
+	/// The targets are instances of one claim: in every cell at least one of
+	/// them must fail (rather than each of them in every cell).
+	bool                                anyTarget = false;
 };
 
 const std::vector< NegativeCase >& negativeCases()
 {
 	static const std::vector< NegativeCase > c = {
-		{ "pitchGlobalMax", []( Mutations& m ) { m.pitchGlobalMax = true; }, { "pitch.octave" }, { "pitch" } },
-		{ "pitchSpectralPeak", []( Mutations& m ) { m.pitchSpectralPeak = true; }, { "pitch.mf", "pitch.h2" }, { "pitch" } },
+		{ "fftFloatTwiddles", []( Mutations& m ) { m.fftFloatTwiddles = true; }, { "fft.dft" }, { "fft" } },
+		{ "pitchGlobalMax", []( Mutations& m ) { m.pitchGlobalMax = true; }, { "pitch.octave", "pitch.noise", "pitch.residue" }, { "pitch" } },
+		{ "pitchSpectralPeak", []( Mutations& m ) { m.pitchSpectralPeak = true; }, { "pitch.mf", "pitch.h2", "pitch.residue", "pitch.unvoiced" }, { "pitch" } },
 		{ "pitchNoInterp", []( Mutations& m ) { m.pitchNoInterp = true; }, { "pitch.sine" }, { "pitch" } },
-		{ "pitchLagDelay=0.1", []( Mutations& m ) { m.pitchLagDelay = 0.1; }, { "pitch.vibrato" }, { "pitch" } },
+		{ "pitchLagDelay=0.1", []( Mutations& m ) { m.pitchLagDelay = 0.1; }, { "pitch.vibrato", "partials.harmonic" }, { "pitch", "partials" } },
 		{ "partialsNoInterp", []( Mutations& m ) { m.partialsNoInterp = true; }, { "partials.sines" }, { "partials" } },
-		{ "onsetNoPrime", []( Mutations& m ) { m.onsetNoPrime = true; }, { "onset.prime.quiet", "fallback.prime.quiet" },
-		  { "onset-prime", "fallback" } },
-		{ "onsetFullSeed", []( Mutations& m ) { m.onsetFullSeed = true; }, { "onset.prime.hears", "fallback.prime.hears" },
-		  { "onset-prime", "fallback" } },
+		{ "onsetNoPrime", []( Mutations& m ) { m.onsetNoPrime = true; },
+		  { "onset.prime.quiet", "fallback.prime.quiet", "fallback.gap", "onset.attack.swell" }, { "onset-prime", "onset-attack", "fallback" } },
+		{ "onsetFullSeed", []( Mutations& m ) { m.onsetFullSeed = true; },
+		  { "onset.prime.hears", "fallback.prime.hears", "onset.prime.steady" }, { "onset-prime", "fallback" } },
 		{ "onsetSnapZeroDt", []( Mutations& m ) { m.onsetSnapZeroDt = true; }, { "fallback.dt0" }, { "fallback" } },
-		{ "onsetNoMask", []( Mutations& m ) { m.onsetNoMask = true; }, { "onset.attack.hard" }, { "onset-attack" } },
+		{ "onsetNoMask", []( Mutations& m ) { m.onsetNoMask = true; }, { "onset.attack.hard", "onset.attack.cut" }, { "onset-attack" } },
+		{ "onsetMaskWinnerOnly", []( Mutations& m ) { m.onsetMaskWinnerOnly = true; }, { "onset.attack.broadband" }, { "onset-attack" } },
 		{ "onsetNoRisingEdge", []( Mutations& m ) { m.onsetNoRisingEdge = true; }, { "onset.attack.once" }, { "onset-attack" } },
 		{ "onsetPlainFlux", []( Mutations& m ) { m.onsetPlainFlux = true; }, { "onset.steady" }, { "onset-prime" }, true },
+		{ "onsetFullWave", []( Mutations& m ) { m.onsetFullWave = true; }, { "onset.attack.release" }, { "onset-attack" } },
+		{ "onsetLinearFlux", []( Mutations& m ) { m.onsetLinearFlux = true; }, { "onset.attack.soft" }, { "onset-attack" } },
 		{ "bandNoParseval", []( Mutations& m ) { m.bandNoParseval = true; }, { "bands.level", "bands.noise" }, { "bands" } },
-		{ "tempoLegacy", []( Mutations& m ) { m.tempoLegacy = true; }, { "tempo.4otf-125" }, { "tempo" } },
+		{ "envelopeOneRate", []( Mutations& m ) { m.envelopeOneRate = true; }, { "bands.envelope" }, { "bands" } },
+		{ "tempoLegacy", []( Mutations& m ) { m.tempoLegacy = true; }, { "tempo.4otf-125", "tempo.break-96", "tempo.dnb-174", "tempo.fps" }, { "tempo" } },
+		// The five grooves are one claim (tempo on grooves). No mis-design
+		// tried misreads the shuffle (AGENTS.md), so the claim's control is
+		// that pattern v0.1.0 fails it -- some groove -- in every cell.
+		{ "tempoLegacy (the groove set)", []( Mutations& m ) { m.tempoLegacy = true; },
+		  { "tempo.4otf-125", "tempo.kick-128", "tempo.break-96", "tempo.dnb-174", "tempo.shuffle-110" }, { "tempo" }, false, true },
+		{ "tempoSlowestLevel", []( Mutations& m ) { m.tempoSlowestLevel = true; }, { "tempo.kick-128" }, { "tempo" } },
 		{ "tempoNoOnsetGate", []( Mutations& m ) { m.tempoNoOnsetGate = true; }, { "tempo.noise" }, { "tempo" } },
 		{ "thirdOrder2", []( Mutations& m ) { m.thirdOrder2 = true; }, { "thirds.mask" }, { "thirds" } },
 		{ "thirdFixedOrder", []( Mutations& m ) { m.thirdFixedOrder = true; }, { "thirds.mask" }, { "thirds" } },
 		{ "thirdBase2", []( Mutations& m ) { m.thirdBase2 = true; }, { "thirds.centre" }, { "thirds" } },
 		{ "thirdNoPrewarp", []( Mutations& m ) { m.thirdNoPrewarp = true; }, { "thirds.mask", "thirds.edge" }, { "thirds" } },
+		{ "thirdFloatArithmetic", []( Mutations& m ) { m.thirdFloatArithmetic = true; }, { "thirds.sines" }, { "thirds" } },
+		{ "thirdSlowWeighting", []( Mutations& m ) { m.thirdSlowWeighting = true; }, { "thirds.ballistics" }, { "thirds" } },
+		{ "thirdNoHold", []( Mutations& m ) { m.thirdNoHold = true; }, { "thirds.ballistics" }, { "thirds" } },
 		{ "stereoSwap", []( Mutations& m ) { m.stereoSwap = true; }, { "stereo.balance", "stereo.pair" }, { "stereo" } },
-		{ "stereoNoNormalise", []( Mutations& m ) { m.stereoNoNormalise = true; }, { "stereo.correlation" }, { "stereo" } },
+		{ "stereoNoNormalise", []( Mutations& m ) { m.stereoNoNormalise = true; }, { "stereo.correlation", "stereo.mono" }, { "stereo" } },
+		{ "stereoWidthSideOverMid", []( Mutations& m ) { m.stereoWidthSideOverMid = true; }, { "stereo.width" }, { "stereo" } },
+		{ "stereoMonoLeftOnly", []( Mutations& m ) { m.stereoMonoLeftOnly = true; }, { "stereo.mono" }, { "stereo" } },
 		{ "tapPeekLatest", []( Mutations& m ) { m.tapPeekLatest = true; }, { "tap.contiguous" }, { "tap" } },
 		{ "tapNoAntiAlias", []( Mutations& m ) { m.tapNoAntiAlias = true; }, { "tap.alias" }, { "tap" } },
+		{ "tapCutoffQuarter", []( Mutations& m ) { m.tapCutoffQuarter = true; }, { "tap.passband" }, { "tap" } },
 		{ "silentByLevel", []( Mutations& m ) { m.silentByLevel = true; }, { "silent.quiet" }, { "silent" } },
 		{ "silentNever", []( Mutations& m ) { m.silentNever = true; }, { "silent.zero" }, { "silent" } },
+		{ "silentLatched", []( Mutations& m ) { m.silentLatched = true; }, { "silent.recovery" }, { "silent" } },
+		{ "silentOnPair", []( Mutations& m ) { m.silentOnPair = true; }, { "silent.raw" }, { "silent" } },
 		{ "configureClears", []( Mutations& m ) { m.configureClears = true; }, { "params.keep" }, { "params" } },
 		{ "ringNoValidate", []( Mutations& m ) { m.ringNoValidate = true; }, { "ring.lapped" }, { "ring" } },
+		{ "ringNoEpoch", []( Mutations& m ) { m.ringNoEpoch = true; }, { "ring.race" }, { "ring" } },
 		{ "fallbackInventsPitch", []( Mutations& m ) { m.fallbackInventsPitch = true; }, { "fallback.empty" }, { "fallback" } },
+		{ "fallbackOnSilent", []( Mutations& m ) { m.fallbackOnSilent = true; }, { "fallback.down" }, { "fallback" } },
+		{ "hostPowerAsMagnitude", []( Mutations& m ) { m.hostPowerAsMagnitude = true; }, { "fallback.law" }, { "fallback" } },
+		{ "captureOpenInline", []( Mutations& m ) { m.captureOpenInline = true; }, { "capture.slowopen" }, { "capture" } },
+		{ "captureMissingToDefault", []( Mutations& m ) { m.captureMissingToDefault = true; }, { "capture.missing" }, { "capture" } },
+		{ "captureLostIgnored", []( Mutations& m ) { m.captureLostIgnored = true; }, { "capture.lost" }, { "capture" } },
+		{ "captureRateFixed", []( Mutations& m ) { m.captureRateFixed = true; }, { "capture.rate" }, { "capture" } },
+		{ "captureNoCloseOnDestroy", []( Mutations& m ) { m.captureNoCloseOnDestroy = true; }, { "capture.destructor" }, { "capture" } },
+		{ "allocPerFrame", []( Mutations& m ) { m.allocPerFrame = true; }, { "alloc.render" }, { "alloc" } },
 	};
 	return c;
 }
@@ -125,6 +156,23 @@ const std::vector< NegativeCase >& negativeCases()
 int runNegative( const Options& o )
 {
 	std::printf( "Negative controls: each mutation must make every check it targets fail in every cell.\n\n" );
+
+	// Coverage: every check the harness has must pass unmutated and be the
+	// target of at least one mutation. (Skipped with --only.)
+	std::set< std::string > allChecks, unpassed;
+	if( o.only.empty() )
+	{
+		Report base;
+		base.quiet = true;
+		runGroups( base, o, {}, Mutations() );
+		for( const Outcome& out : base.outcomes() )
+		{
+			allChecks.insert( out.check );
+			if( !out.pass )
+				unpassed.insert( out.check + " (" + out.run + ")" );
+		}
+	}
+	std::set< std::string > targeted;
 	int caught = 0, total = 0;
 	for( const NegativeCase& c : negativeCases() )
 	{
@@ -137,24 +185,54 @@ int runNegative( const Options& o )
 		runGroups( rep, o, c.groups, m );
 		bool        all = true;
 		std::string detail;
-		for( const std::string& t : c.targets )
+		if( c.anyTarget )
 		{
-			const int ran = rep.cellsRun( t ), failed = rep.cellsFailed( t );
-			all = all && ran > 0 && ( c.anyCell ? failed > 0 : failed == ran );
-			detail += format( "  %s %d/%d", t.c_str(), failed, ran );
+			std::set< std::string > runs, failedRuns;
+			for( const Outcome& out : rep.outcomes() )
+				if( std::find( c.targets.begin(), c.targets.end(), out.check ) != c.targets.end() )
+				{
+					runs.insert( out.run );
+					if( !out.pass )
+						failedRuns.insert( out.run );
+				}
+			all = !runs.empty() && failedRuns.size() == runs.size();
+			detail = format( "  some groove fails in %zu/%zu cells", failedRuns.size(), runs.size() );
 		}
+		else
+			for( const std::string& t : c.targets )
+			{
+				const int ran = rep.cellsRun( t ), failed = rep.cellsFailed( t );
+				all = all && ran > 0 && ( c.anyCell ? failed > 0 : failed == ran );
+				detail += format( "  %s %d/%d", t.c_str(), failed, ran );
+			}
 		++total;
 		if( all )
+		{
 			++caught;
-		std::printf( "  %s  %-22s%s%s\n", all ? "caught" : "MISSED", c.name, detail.c_str(),
+			targeted.insert( c.targets.begin(), c.targets.end() );
+		}
+		std::printf( "  %s  %-28s%s%s\n", all ? "caught" : "MISSED", c.name, detail.c_str(),
 					 c.anyCell ? "  (statistical: one cell is enough)" : "" );
 		if( !all )
 			for( const Outcome& out : rep.outcomes() )
-				if( std::find( c.targets.begin(), c.targets.end(), out.check ) != c.targets.end() && out.pass )
+				if( !c.anyTarget && std::find( c.targets.begin(), c.targets.end(), out.check ) != c.targets.end() && out.pass )
 					std::printf( "          still passes: %s %s %s\n", out.check.c_str(), out.run.c_str(), out.detail.c_str() );
 	}
 	std::printf( "\nnegative: %d of %d mutations caught\n", caught, total );
-	return caught == total ? 0 : 1;
+	if( !o.only.empty() )
+		return caught == total ? 0 : 1;
+
+	std::vector< std::string > uncovered;
+	for( const std::string& name : allChecks )
+		if( targeted.count( name ) == 0 )
+			uncovered.push_back( name );
+	for( const std::string& u : unpassed )
+		std::printf( "  baseline FAILS: %s (a control on a failing check proves nothing)\n", u.c_str() );
+	for( const std::string& u : uncovered )
+		std::printf( "  no control: %s\n", u.c_str() );
+	std::printf( "coverage: %zu of %zu checks have a mutation that makes them fail; baseline %s\n", allChecks.size() - uncovered.size(),
+				 allChecks.size(), unpassed.empty() ? "passes" : "FAILS" );
+	return caught == total && uncovered.empty() && unpassed.empty() ? 0 : 1;
 }
 
 //---------------------------------------------------------------------------

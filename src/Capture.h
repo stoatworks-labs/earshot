@@ -85,6 +85,7 @@ private:
 	std::atomic< int >     rate_{ 0 };
 	std::atomic< int >     native_{ 0 };
 	std::atomic< int64_t > zeroRun_{ 0 };   ///< consecutive bit-exact-zero frames
+	mutable std::atomic< bool > silentLatch_{ false };   ///< the silentLatched negative control only
 	std::atomic< bool >    lost_{ false };
 	std::atomic< bool >    feeding_{ false };
 	int                    feedChannels_ = 0;

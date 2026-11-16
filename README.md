@@ -12,9 +12,11 @@
 > on five grooves by 4 s, including the four-on-the-floor at 125 that pattern
 > v0.1.0 read as 62, and within 0.22 BPM on pattern's real release-video
 > soundtrack; a waveform tap that is the input sample for sample; and **no
-> allocation** on the render or audio thread. Every check has a negative
-> control that must fail, and all 27 do (one, a statistical effect, at one
-> sample rate only); fifteen planted bugs are all caught.
+> allocation** on the render or audio thread. Every one of its 65 checks
+> has a negative control, a planted defect it must fail, and all 51 do (one
+> only at one sample rate, a statistical effect; one, for tempo, fails four
+> of the five grooves but never the shuffle); fifteen further planted bugs
+> are all caught.
 > **No plugin uses it yet. It has never opened a live audio device**, from a
 > host or anywhere else, and **it has never been compiled with MSVC**.
 
@@ -100,7 +102,9 @@ and again built without fused multiply-add):
   48. Every band's response inside IEC 61260:1995 class 1 on 4,000 points
   per band: 0.89 dB to spare on the skirts; edge attenuation 3.0099-3.0103 dB
   (class 1 allows 2.0-5.0). The running filters match that response end to
-  end within 0.0004 dB.
+  end within 0.0004 dB. The Fast level decays at 34.744 dB/s (the 125 ms
+  time constant's 34.74), and the peak hold holds for its second and falls
+  at its 20 dB/s.
 - **Tempo.** Five synthetic grooves (four-on-the-floor 125, kick 128, break
   96, drum and bass 174, triplet shuffle 110): settled at 4.0 s, every frame
   from 6 s within 0.09 BPM; the same at 24, 30 and 60 fps. White noise and a
@@ -110,7 +114,7 @@ and again built without fused multiply-add):
   the tap equal to the analytic signal within 2.3e-5 of full scale, 87 dB of
   alias rejection, flat to 0.0004 dB at 2 kHz.
 - **Capture logic**, against a scripted device: a 300 ms open never blocks
-  `update()` (worst 0.7 ms); a missing device is retried and opens at 2.1 s,
+  `update()` (worst 0.7 ms unloaded); a missing device is retried and opens at 2.1 s,
   the default never asked for; unplugged, Missing in 7 ms and back as a new
   stream; Silent at exactly 3.000 s of zeros, never on -120 dBFS noise;
   210 million frames through the ring from a racing thread, no torn read; a

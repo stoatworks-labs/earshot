@@ -168,7 +168,8 @@ void BandAnalyser::hop( uint64_t endSample, const Config& config, const testing:
 	{
 		const double p = std::norm( spec_[ (size_t)k ] );
 		power_[ (size_t)k ]  = p;
-		logMag_[ (size_t)k ] = (float)std::log1p( gain * std::sqrt( p ) * toAmp );
+		logMag_[ (size_t)k ] = mut.onsetLinearFlux ? (float)( std::sqrt( p ) * toAmp )   // the negative control: pattern's linear flux
+												   : (float)std::log1p( gain * std::sqrt( p ) * toAmp );
 	}
 
 	const bool first = !havePrev_;
@@ -198,7 +199,8 @@ void BandAnalyser::hop( uint64_t endSample, const Config& config, const testing:
 			if( k < half )
 				ref = std::max( ref, prevLogMag_[ (size_t)( k + 1 ) ] );
 		}
-		binFlux_[ (size_t)k ] = std::max( 0.0f, logMag_[ (size_t)k ] - ref );
+		binFlux_[ (size_t)k ] = mut.onsetFullWave ? std::fabs( logMag_[ (size_t)k ] - prevLogMag_[ (size_t)k ] )
+												  : std::max( 0.0f, logMag_[ (size_t)k ] - ref );
 	}
 
 	// Tempo registers read every bin, whatever the user's bands.
@@ -219,7 +221,7 @@ void BandAnalyser::hop( uint64_t endSample, const Config& config, const testing:
 			e += p;
 			f += binFlux_[ (size_t)k ];
 			l += logMag_[ (size_t)k ];
-			up += std::max( 0.0, p - pp );
+			up += mut.onsetFullWave ? std::fabs( p - pp ) : std::max( 0.0, p - pp );
 		}
 		energy[ b ]   = e * toMs;
 		flux[ b ]     = f;
@@ -236,7 +238,8 @@ void BandAnalyser::hop( uint64_t endSample, const Config& config, const testing:
 	const int    floorHops  = std::max( 1, (int)std::lround( kFloorSeconds / dt ) );
 	const double attack     = dsp::onePoleAlpha( dt, config.envelopeAttack );
 	const double release    = dsp::onePoleAlpha( dt, config.envelopeRelease );
-	const double maskRatio  = std::pow( 10.0, -config.onsetMaskDb / 10.0 );
+	// (onsetMaskWinnerOnly, a negative control: only the largest rise may fire.)
+	const double maskRatio  = mut.onsetMaskWinnerOnly ? 1.0 : std::pow( 10.0, -config.onsetMaskDb / 10.0 );
 	// Nothing fires on a rise smaller than an onsetGateDb sine: the first hop
 	// that catches an attack may hold only its first half millisecond, a
 	// sliver at -100 dB whose spectrum is as wide as the band plan, and on a
@@ -307,7 +310,7 @@ void BandAnalyser::hop( uint64_t endSample, const Config& config, const testing:
 			--s.quiet;
 		s.prevFlux   = flux[ b ];
 		s.prevEnergy = energy[ b ];
-		s.envelope += ( s.level - s.envelope ) * ( s.level > s.envelope ? attack : release );
+		s.envelope += ( s.level - s.envelope ) * ( s.level > s.envelope || mut.envelopeOneRate ? attack : release );
 	}
 
 	for( int k = 0; k <= half; ++k )

@@ -120,10 +120,13 @@ public:
 		interleaved at channels(). False if they are not all written yet, have
 		scrolled out, were overwritten during the copy, or the stream restarted.
 	*/
-	bool read( uint64_t start, size_t frames, float* out, uint32_t expectEpoch, bool validate = true ) const noexcept
+	bool read( uint64_t start, size_t frames, float* out, uint32_t expectEpoch, bool validate = true,
+			   bool checkEpoch = true ) const noexcept
 	{
+		// `validate` and `checkEpoch` are false only for the harness's negative
+		// controls (ringNoValidate, ringNoEpoch).
 		const uint32_t e1 = epoch_.load( std::memory_order_acquire );
-		if( ( e1 & 1u ) != 0 || e1 != expectEpoch || frames == 0 || frames > capacity_ )
+		if( ( e1 & 1u ) != 0 || ( checkEpoch && e1 != expectEpoch ) || frames == 0 || frames > capacity_ )
 			return false;
 		const int      ch = channels_.load( std::memory_order_relaxed );
 		const uint64_t w  = written_.load( std::memory_order_acquire );

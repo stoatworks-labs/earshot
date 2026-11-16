@@ -52,7 +52,8 @@ author's guide.
   thread does every open and close; it starts on the first `selectDevice`
   with a name, not at construction, because hosts construct instances they
   never render. `capture.slowopen`: a 300 ms open, `selectDevice` 0.01 ms,
-  worst `update` 0.7 ms.
+  worst `update` 0.7 ms (the limit is 100 ms, a third of the open: see the
+  wall-time trap).
 - **A parameter change never clears the ring.** `configure()` stores a
   pending copy under a mutex; `update()` takes it with `try_lock` (never
   waits; a busy writer means next frame). Analysers reconfigure in place.
@@ -188,7 +189,10 @@ Only the analytic response is judged against the mask; the running filters
 are then checked end to end against that analytic response.
 
 Level: mean square through IEC 61672's Fast (125 ms), primed with the first
-block. Peak hold and fall in audio time.
+block. Peak hold and fall in audio time. `thirds.ballistics` times both
+after a cut: the Fast decay is 34.744 dB/s (10 lg e / 0.125 s; limit
+0.1 dB/s), the hold lasts thirdHoldSeconds after the last peak to within a
+frame, then falls at thirdFallDbPerSecond.
 
 ### Tempo: pattern v0.1.1's detector, plus an onset gate
 
@@ -271,9 +275,32 @@ the check in `tools/estest/Check*.cpp`. The kinds:
 
 ## Negative controls and the mutation test
 
-`estest --negative`: 27 `Mutations` flags (include/earshot/testing.h), each a
-bug the fleet shipped or a design this repo rejected; every check a flag
-targets must FAIL in every cell. All 27 are caught.
+`estest --negative`: 50 `Mutations` flags (include/earshot/testing.h) in 51
+cases, each a bug the fleet shipped, a design this repo rejected, or a
+classic slip (biquads in float, a float twiddle recurrence, an allocation
+per frame, a device swapped for the default); every check a case targets
+must FAIL in every cell. All 51 are caught. The run begins with every group
+unmutated and ends with coverage: each of the 65 checks must pass unmutated
+and be the target of a caught case, or `--negative` fails. All 65 are.
+
+Two controls are weaker than the rest, and say so:
+
+- `onsetPlainFlux` (no maximum filter) fails `onset.steady` at 48 kHz only
+  (the filter's benefit is statistical; Known limits).
+- **The five tempo grooves are one claim**, tempo on grooves, and its control
+  is pattern v0.1.0 (`tempoLegacy`), which misreads four of them in every
+  cell. Nothing tried misreads the triplet shuffle at 110: the slowest
+  metrical level, level ratios from 0.3 to 0.99, no tempo prior, no R(T/2)
+  term, registers at equal weight, an onset gate that counts only the kick
+  band all read 110 within 0.03 BPM. For this detector it is a groove with
+  no metrical ambiguity, kept as a guard for ternary subdivision.
+  `tempoSlowestLevel` fails kick-128 on its own.
+
+Before the coverage pass, 27 cases covered 34 checks. Sweeping every flag
+across every group showed many incidental failures (pattern's seed also
+fails the clap test, but only at 48 kHz; a broken level fails the envelope
+timing because the 63 % point is never reached); a control counts only for
+the checks it fails in every cell, and the timing claims got their own.
 
 `tools/mutate.sh`: fifteen source edits the harness has never heard of
 (a parabola's sign, a time constant, an ISO label, a seqlock's lap check...),
@@ -281,6 +308,23 @@ each built in a scratch copy; estest must fail. Fifteen of fifteen killed.
 
 ## Traps
 
+- **Wall time measures the scheduler.** `capture.slowopen` limited
+  `update()` to 5 ms; on this shared Mac, with other builds and a release
+  running, one update took 31 ms, and the check failed twice in a day (once
+  inside an unrelated negative-control run). The claim is that the render
+  thread never waits for the open, and a waiting one takes the whole
+  300 ms, so the limit is now 100 ms. The unloaded figures are unchanged.
+- **A sub-check that builds its own Engine must hand it the mutations.**
+  `fallback.law`'s Power-law half constructed an Engine without them, so no
+  control could reach it. Found when every check had to have a control.
+- **A refusal for the wrong reason passes.** `ring.race`'s "a reset
+  invalidates an old reader" read frames the reset had removed, so the
+  frame count refused the read whatever the epoch said. It now writes them
+  again first; only the epoch can refuse.
+- **A test double that tidies up hides the bug.** The scripted backend's
+  destructor closed its stream, so "destroying the Engine closes the device"
+  passed when the Engine never closed it. The double now records a stream
+  still running when it is destroyed.
 - **macOS make compares mtimes to the second.** mutate.sh first rewrote a
   file in the same second its object was built; make called it up to date
   and the previous mutant was tested instead; a restored file kept its

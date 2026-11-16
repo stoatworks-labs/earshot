@@ -29,9 +29,10 @@ void StereoMeter::analyse( const float* left, const float* right, int n, bool mo
 		std::swap( left, right );
 
 	double ll = 0.0, rr = 0.0, lr = 0.0, pl = 0.0, pr = 0.0;
+	const bool monoLeftOnly = mono && mut.stereoMonoLeftOnly;
 	for( int i = 0; i < n; ++i )
 	{
-		const double l = left[ i ], r = right[ i ];
+		const double l = left[ i ], r = monoLeftOnly ? 0.0 : right[ i ];
 		ll += l * l;
 		rr += r * r;
 		lr += l * r;
@@ -49,7 +50,14 @@ void StereoMeter::analyse( const float* left, const float* right, int n, bool mo
 		out.correlation = (float)dsp::clampd( lr / std::sqrt( ll * rr ), -1.0, 1.0 );
 
 	const double total = ll + rr;
-	out.width = total > 1e-30 ? (float)dsp::clampd( ( total - 2.0 * lr ) / ( 2.0 * total ), 0.0, 1.0 ) : 0.0f;
+	if( mut.stereoWidthSideOverMid )
+	{
+		// The negative control: side over mid energy, the goniometer shortcut.
+		const double mid = 0.25 * ( total + 2.0 * lr ), side = 0.25 * ( total - 2.0 * lr );
+		out.width = mid > 1e-30 ? (float)dsp::clampd( side / mid, 0.0, 1.0 ) : ( side > 1e-30 ? 1.0f : 0.0f );
+	}
+	else
+		out.width = total > 1e-30 ? (float)dsp::clampd( ( total - 2.0 * lr ) / ( 2.0 * total ), 0.0, 1.0 ) : 0.0f;
 
 	if( ll > 1e-30 && rr > 1e-30 )
 		out.balanceDb = (float)dsp::clampd( 10.0 * std::log10( ll / rr ), -60.0, 60.0 );

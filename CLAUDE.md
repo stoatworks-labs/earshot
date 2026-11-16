@@ -26,7 +26,8 @@ Read `AGENTS.md` before changing a detector, a constant, or any tolerance in
     --silent --ring --params --fallback --capture --alloc`; `estest --help`)
   - one cell: `--rate 48000 --block 128`
   - negative controls: `estest --negative` (every mutation must fail the
-    checks it targets; ~2 min); one of them: `--negative --only onsetNoMask`
+    checks it targets, and every check must pass unmutated and have a
+    mutation that fails it; ~5 min); one of them: `--negative --only onsetNoMask`
   - run groups with one mutation set, to watch it fail: `estest --tempo --with tempoLegacy`
   - a file through the engine: `estest --file track.wav [--expect-bpm 125 --from 6 --fps 30]`
   - performance: `estest --perf`
@@ -57,7 +58,8 @@ Read `AGENTS.md` before changing a detector, a constant, or any tolerance in
 - No allocation, lock or wait on the render or audio thread after
   construction; `estest --alloc` and `--capture` count it.
 - A new claim gets a check with a written tolerance source and a negative
-  control (a `Mutations` flag) that makes it fail in every cell.
+  control (a `Mutations` flag and a case in `negativeCases()`) that makes it
+  fail in every cell. `estest --negative` fails while any check has none.
 - Never open an audio device from `verify.sh` (no microphone prompts).
 - `CMAKE_OSX_ARCHITECTURES` and the deployment target are only defaulted when
   earshot is the top-level project; as a subdirectory the plugin decides.

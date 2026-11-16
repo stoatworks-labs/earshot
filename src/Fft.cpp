@@ -8,7 +8,7 @@
 namespace earshot
 {
 
-bool Fft::init( int maxSize ) noexcept
+bool Fft::init( int maxSize, bool floatRecurrence ) noexcept
 {
 	if( maxSize < 2 || ( maxSize & ( maxSize - 1 ) ) != 0 )
 		return false;
@@ -20,11 +20,21 @@ bool Fft::init( int maxSize ) noexcept
 	{
 		return false;
 	}
-	for( int i = 0; i < maxSize / 2; ++i )
+	if( floatRecurrence )
 	{
-		const double a = -dsp::kTwoPi * (double)i / (double)maxSize;
-		twiddles_[ (size_t)i ] = std::complex< float >( (float)std::cos( a ), (float)std::sin( a ) );
+		// The negative control: the design spasis measured and rejected.
+		const float                 a = (float)( -dsp::kTwoPi / (double)maxSize );
+		const std::complex< float > step( std::cos( a ), std::sin( a ) );
+		std::complex< float >       w( 1.0f, 0.0f );
+		for( int i = 0; i < maxSize / 2; ++i, w *= step )
+			twiddles_[ (size_t)i ] = w;
 	}
+	else
+		for( int i = 0; i < maxSize / 2; ++i )
+		{
+			const double a = -dsp::kTwoPi * (double)i / (double)maxSize;
+			twiddles_[ (size_t)i ] = std::complex< float >( (float)std::cos( a ), (float)std::sin( a ) );
+		}
 	maxSize_ = maxSize;
 	return true;
 }

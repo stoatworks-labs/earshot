@@ -122,10 +122,12 @@ void ThirdOctaveBank::setRate( int fs, const testing::Mutations& mut ) noexcept
 		BandFilter& b     = bands_[ count_ ];
 		const int   order = mut.thirdOrder2 ? 2 : ( mut.thirdFixedOrder ? 3 : orderFor( fm, (double)fs, G, !mut.thirdNoPrewarp ) );
 		b.design( fm, (double)fs, order, !mut.thirdNoPrewarp, G );
+		b.single    = mut.thirdFloatArithmetic;
 		b.nominalHz = nominalFor( x );
 		++count_;
 	}
-	alpha_ = 1.0 - std::exp( -1.0 / ( kFastSeconds * fs ) );
+	alpha_ = 1.0 - std::exp( -1.0 / ( ( mut.thirdSlowWeighting ? 1.0 : kFastSeconds ) * fs ) );
+	noHold_ = mut.thirdNoHold;
 	reset();
 }
 
@@ -191,7 +193,7 @@ void ThirdOctaveBank::publish( Third* out, int& count, double dt, const Config& 
 		else if( dt > 0.0 )
 		{
 			held_[ b ] += dt;
-			const double over = held_[ b ] - (double)config.thirdHoldSeconds;
+			const double over = held_[ b ] - ( noHold_ ? 0.0 : (double)config.thirdHoldSeconds );
 			if( over > 0.0 )
 				hold_[ b ] = std::max( db, hold_[ b ] - (double)config.thirdFallDbPerSecond * std::min( dt, over ) );
 		}
