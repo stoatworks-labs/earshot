@@ -19,6 +19,7 @@ constexpr double kPriorBpm     = 120.0;
 constexpr double kPriorOctaves = 1.0;
 constexpr double kAgree        = 0.02;   ///< two readings in a row within this ratio publish
 constexpr int    kMinCells     = 300;    ///< three seconds before the first reading
+constexpr int    kMinOnsets    = 6;      ///< onset hops in the window before a reading (earshot's gate)
 
 /// Unbiased autocorrelation (each lag's sum over its own overlap), normalised
 /// by the lag-0 power. pattern's `AutoCorr`.
@@ -60,12 +61,20 @@ void TempoTracker::reset() noexcept
 	candidate_   = 0.0;
 	peakR_       = 0.0;
 	readings_    = 0;
+	onsetHead_   = 0;
+	onsetCount_  = 0;
 }
 
-void TempoTracker::push( double t, const double* reg, double hopRate ) noexcept
+void TempoTracker::push( double t, const double* reg, double hopRate, bool onset ) noexcept
 {
 	if( !( hopRate > 0.0 ) || !( t > 0.0 ) )
 		return;
+	if( onset )
+	{
+		onsets_[ onsetHead_ ] = t;
+		onsetHead_            = ( onsetHead_ + 1 ) % 64;
+		onsetCount_           = std::min( onsetCount_ + 1, 64 );
+	}
 	const double dt = 1.0 / hopRate;
 	const double t0 = std::max( 0.0, t - dt );
 
@@ -99,7 +108,15 @@ void TempoTracker::push( double t, const double* reg, double hopRate ) noexcept
 	if( second > lastSecond_ )
 	{
 		lastSecond_ = second;
-		if( lastCell_ + 1 >= kMinCells )
+		int recent = 0;
+		for( int i = 0; i < onsetCount_; ++i )
+			recent += onsets_[ i ] > t - kWindow / (double)kRate ? 1 : 0;
+		if( lastCell_ + 1 >= kMinCells && recent < kMinOnsets && !( mut != nullptr && mut->tempoNoOnsetGate ) )
+		{
+			candidate_ = 0.0;   // nothing to read; the next two readings must agree afresh
+			peakR_     = 0.0;
+		}
+		else if( lastCell_ + 1 >= kMinCells )
 		{
 			if( mut != nullptr && mut->tempoLegacy )
 				detectLegacy();

@@ -47,6 +47,7 @@ struct Mutations
 
 	// Tempo
 	bool tempoLegacy        = false; ///< pattern v0.1.0: raw summed flux, best lag, a half at 70 %
+	bool tempoNoOnsetGate   = false; ///< take readings with no onsets in the window
 
 	// Thirds
 	bool thirdOrder2        = false; ///< second-order prototype instead of third

@@ -39,8 +39,15 @@
 	- **Published** once two readings in a row agree within 2 %. One reading a
 	  second over the last six seconds, so the first tempo appears at about
 	  four seconds.
+	- **Only with onsets** (earshot's addition): a reading is taken only if at
+	  least six hops in the last six seconds fired an onset (60 BPM, one per
+	  beat). Standardising each register to unit variance amplifies anything,
+	  and a held chord's partials beating in the flux settled at 167 BPM with
+	  confidence 0.71. A published tempo stays published through a breakdown;
+	  it is replaced only by two new agreeing readings.
 
-	The constants are pattern's, unchanged; the only difference is the input.
+	The constants are pattern's, unchanged; the input and the onset gate are
+	the differences.
 
 	**Latency**: 4 s to settle; then one reading a second. **Thread**: render
 	thread, inside Engine::update; the detection itself runs once per audio
@@ -57,8 +64,9 @@ public:
 
 	void reset() noexcept;
 
-	/// One hop's register flux, the hop ending at audio time `t`; `hopRate` in Hz.
-	void push( double t, const double* reg, double hopRate ) noexcept;
+	/// One hop's register flux, the hop ending at audio time `t`; `hopRate` in
+	/// Hz; `onset` if any band fired an onset on this hop.
+	void push( double t, const double* reg, double hopRate, bool onset ) noexcept;
 
 	void publish( Tempo& out ) const noexcept;
 
@@ -83,6 +91,9 @@ private:
 	double  candidate_    = 0.0;
 	double  peakR_        = 0.0;
 	int     readings_     = 0;
+	double  onsets_[ 64 ] = {};       ///< times of recent onset hops (a ring)
+	int     onsetHead_    = 0;
+	int     onsetCount_   = 0;
 };
 
 } // namespace earshot

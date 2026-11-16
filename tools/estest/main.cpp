@@ -104,6 +104,7 @@ const std::vector< NegativeCase >& negativeCases()
 		{ "onsetPlainFlux", []( Mutations& m ) { m.onsetPlainFlux = true; }, { "onset.steady" }, { "onset-prime" }, true },
 		{ "bandNoParseval", []( Mutations& m ) { m.bandNoParseval = true; }, { "bands.level", "bands.noise" }, { "bands" } },
 		{ "tempoLegacy", []( Mutations& m ) { m.tempoLegacy = true; }, { "tempo.4otf-125" }, { "tempo" } },
+		{ "tempoNoOnsetGate", []( Mutations& m ) { m.tempoNoOnsetGate = true; }, { "tempo.noise" }, { "tempo" } },
 		{ "thirdOrder2", []( Mutations& m ) { m.thirdOrder2 = true; }, { "thirds.mask" }, { "thirds" } },
 		{ "thirdFixedOrder", []( Mutations& m ) { m.thirdFixedOrder = true; }, { "thirds.mask" }, { "thirds" } },
 		{ "thirdBase2", []( Mutations& m ) { m.thirdBase2 = true; }, { "thirds.centre" }, { "thirds" } },

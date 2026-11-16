@@ -242,6 +242,7 @@ void BandAnalyser::hop( uint64_t endSample, const Config& config, const testing:
 	// sliver at -100 dB whose spectrum is as wide as the band plan, and on a
 	// silent band log flux turns even that into a crossing.
 	const double gateMs     = std::pow( 10.0, config.onsetGateDb / 10.0 );
+	bool         anyOnset   = false;
 
 	for( int b = 0; b < bandCount_; ++b )
 	{
@@ -288,6 +289,7 @@ void BandAnalyser::hop( uint64_t endSample, const Config& config, const testing:
 		s.above = over && !masked;   // a masked hop does not use up the crossing
 		if( over && rising && armed && !masked )
 		{
+			anyOnset   = true;
 			s.onset    = true;
 			s.count++;
 			s.strength = flux[ b ] / threshold;
@@ -316,7 +318,7 @@ void BandAnalyser::hop( uint64_t endSample, const Config& config, const testing:
 	havePrev_ = true;
 
 	if( tempo != nullptr )
-		tempo->push( t, reg, (double)fs_ / hop_ );
+		tempo->push( t, reg, (double)fs_ / hop_, anyOnset );
 }
 
 void BandAnalyser::publish( Band* out, int& count ) noexcept
