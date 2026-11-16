@@ -128,6 +128,9 @@ PitchStats playPitch( Driver& d, const Signal& mono, double from, double expectH
 //   The confidence must be S/(S+N) within 0.05, N being the noise inside the
 //   pitch path's band (Pitch.h): the NSDF at the period is that ratio by
 //   construction, so the 0.05 is the max-of-noise bias of picking the peak.
+// pitch.residue -- 5 cents (the JND): tones of high harmonics only, whose
+//   pitch is f0 though no partial is near it, and whose every partial lies
+//   above pass two's band.
 // pitch.octave, pitch.h2 -- 5 cents (the JND above). These exist to catch
 //   octave errors, which miss by 1200; a sub-harmonic 26 dB down also nudges
 //   the peak at T by a couple of cents, because the window does not hold a
@@ -183,6 +186,33 @@ void checkPitch( Report& rep, const Run& run, const Mutations& mut )
 				 "harmonics 2-6 only, f0 50-311 Hz: worst %.3f cents from f0 (limit 1), %d of %d frames unvoiced", worst, bad,
 				 total );
 		rep.figure( "pitch.mf worst |cents|", worst );
+	}
+
+	//-- Residue pitch: only high harmonics -------------------------------
+	{
+		// High harmonics and nothing else: pass two cuts the band to 8 f0,
+		// below every one of them, and must still agree with pass one.
+		double worst = 0.0;
+		int    bad = 0, total = 0;
+		for( double f0 : { 100.0, 150.0, 200.0 } )
+		{
+			std::vector< double > amps( 12, 0.0 );
+			for( int h = 9; h <= 12; ++h )
+				amps[ (size_t)h - 1 ] = 0.1;
+			if( f0 == 100.0 )   // harmonics 15-19: pass two's band (800 Hz) is two octaves short of them
+			{
+				amps.assign( 19, 0.0 );
+				for( int h = 15; h <= 19; ++h )
+					amps[ (size_t)h - 1 ] = 0.08;
+			}
+			const Signal s = harmonicTone( run.fs, 0.40, f0, amps );
+			const PitchStats st = playPitch( d, s, 0.15, f0 );
+			total += st.frames;
+			bad += st.frames - st.voiced;
+			worst = std::max( worst, st.voiced > 0 ? st.maxAbsCents : 1e9 );
+		}
+		rep.add( "pitch.residue", cell, bad == 0 && worst <= 5.0,
+				 "harmonics 9-12 only (f0 150, 200 Hz) and 15-19 only (f0 100 Hz): worst %.3f cents from f0 (limit 5), %d of %d frames unvoiced", worst, bad, total );
 	}
 
 	//-- Octave traps ------------------------------------------------------
