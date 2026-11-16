@@ -299,6 +299,7 @@ struct Frame
 	Stereo  stereo;
 
 	int     tapAvailable = 0;  ///< samples readTap will hand out now
+	uint64_t tapDropped  = 0;  ///< tap samples lost because nobody read them in time (since the stream began)
 	uint64_t gapFrames   = 0;  ///< audio skipped because the render thread fell behind
 };
 
@@ -362,7 +363,8 @@ public:
 
 	/// The stereo pair at Config::tapRate, contiguous: every sample since the
 	/// previous call exactly once. Returns how many were written (<= max). Call
-	/// after update(); samples not read stay queued (up to one second).
+	/// after update(); samples not read stay queued (65536 of them, 8.2 s at
+	/// 8 kHz; older ones are dropped and counted in Frame::tapDropped).
 	int readTap( float* left, float* right, int maxSamples ) noexcept;
 	int tapRate() const noexcept;
 

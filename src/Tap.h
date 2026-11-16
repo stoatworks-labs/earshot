@@ -22,8 +22,10 @@
 	aliases into it by more than the stopband. Each output is normalised by
 	the sum of the weights it used, so DC passes exactly at every phase.
 
-	At 8 kHz: passband to 3.2 kHz (a woofer's excursion is negligible well
-	below that; breakup modes start around 1-3 kHz), stopband from about 4 kHz.
+	At 8 kHz: -6 dB at 3.2 kHz (0.4 R), flat within 0.001 dB to 2 kHz and
+	at least 81 dB down from about 4 kHz (estest --tap measures 0.0004 dB at
+	2 kHz and 87 dB of rejection at 4.4 kHz). A woofer's excursion is
+	negligible well below 2 kHz.
 
 	**Latency**: half the kernel, 1.6 ms at any rate, plus however long the
 	plugin waits to read. **Thread**: render thread (inside update, and

@@ -357,6 +357,7 @@ struct Engine::Impl
 			}
 		}
 		frame.tapAvailable = tap.available();
+		frame.tapDropped   = tap.dropped();
 		return frame;
 	}
 };
