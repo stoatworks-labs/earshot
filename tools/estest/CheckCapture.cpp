@@ -9,9 +9,13 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
+#include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
+#include <vector>
 
 namespace estest
 {
