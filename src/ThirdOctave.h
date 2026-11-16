@@ -20,10 +20,16 @@
 
 	## Each filter
 
-	A third-order Butterworth low-pass prototype, transformed to a band-pass
-	(six poles, three biquads) with the band edges pre-warped, so the digital
-	filter's -3.01 dB points land exactly on the IEC band edges whatever the
-	sample rate. Direct form II transposed in double: the 20 Hz band's poles
+	A Butterworth low-pass prototype, transformed to a band-pass (2n poles, n
+	biquads) with the band edges pre-warped, so the digital filter's -3.01 dB
+	points land exactly on the IEC band edges whatever the sample rate. The
+	prototype is third order (n = 3) wherever that meets IEC 61260 class 1,
+	and the smallest higher order that does elsewhere: pre-warping stretches
+	a top band's analog prototype (the 16 kHz band at 44.1 kHz becomes an
+	octave wide in the analog domain, the 20 kHz band at 48 kHz two), and a
+	third-order skirt that wide missed class 1's lower-skirt minimum by
+	7-11 dB. orderFor() picks n from the class 1 minimum attenuation at the
+	mapped breakpoints Omega = G^1..G^4 (both sides), with 1 dB to spare. Direct form II transposed in double: the 20 Hz band's poles
 	sit 0.0004 from the unit circle at 48 kHz, where float coefficients would
 	put the band somewhere else. `estest --thirds` drives sines through these
 	filters and judges the measured attenuation against the class 1 limits.
@@ -37,8 +43,9 @@
 
 	**Latency**: the filters' group delay at mid-band (about 3/(pi BW): 160 ms
 	at 25 Hz, 4 ms at 1 kHz) plus the 125 ms weighting. **Thread**: render
-	thread, inside Engine::update, on every sample in sequence: 31 bands x 3
-	biquads, about 4.5 M biquad steps a second at 48 kHz. No allocation.
+	thread, inside Engine::update, on every sample in sequence: 31 bands of 3
+	biquads (4 for the top two or three), about 4.6 M biquad steps a second at
+	48 kHz. No allocation.
 */
 namespace earshot
 {
@@ -57,14 +64,16 @@ public:
 		double s1 = 0, s2 = 0;
 	};
 
+	static constexpr int kMaxOrder = 6;
+
 	struct BandFilter
 	{
-		Section sec[ 3 ];
+		Section sec[ kMaxOrder ];
 		int     sections = 3;
 		double  exactHz = 0, loHz = 0, hiHz = 0;
 		float   nominalHz = 0;
 
-		/// Design for sample rate fs. `order` is the low-pass prototype order (3).
+		/// Design for sample rate fs. `order` is the low-pass prototype order.
 		void design( double fm, double fs, int order, bool prewarp, double G ) noexcept;
 		void clear() noexcept;
 		double process( double x ) noexcept
@@ -93,6 +102,10 @@ public:
 
 	int        bandCount() const noexcept { return count_; }
 	BandFilter& band( int i ) noexcept { return bands_[ i ]; }
+
+	/// The prototype order for the band at fm: 3, or more where the bilinear
+	/// transform's warping would otherwise break the class 1 skirt.
+	static int orderFor( double fm, double fs, double G, bool prewarp ) noexcept;
 
 	/// The ISO 266 R10 label for band index x.
 	static float nominalFor( int x ) noexcept;

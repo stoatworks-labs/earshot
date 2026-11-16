@@ -50,6 +50,7 @@ struct Mutations
 
 	// Thirds
 	bool thirdOrder2        = false; ///< second-order prototype instead of third
+	bool thirdFixedOrder    = false; ///< third order everywhere, even where warping breaks the skirt
 	bool thirdBase2         = false; ///< G = 2 instead of 10^(3/10)
 	bool thirdNoPrewarp     = false; ///< bilinear transform without pre-warping the band edges
 

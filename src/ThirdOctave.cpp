@@ -48,7 +48,7 @@ void ThirdOctaveBank::BandFilter::design( double fm, double fs, int order, bool 
 	const double B  = w2 - w1;
 	const double wc = 2.0 * std::atan( w0 / k );   // where the analog centre lands
 
-	order    = std::max( 1, std::min( order, 3 ) );
+	order    = std::max( 1, std::min( order, kMaxOrder ) );
 	sections = 0;
 	for( int i = 1; i <= order; ++i )
 	{
@@ -59,7 +59,7 @@ void ThirdOctaveBank::BandFilter::design( double fm, double fs, int order, bool 
 		for( const cd s : { ( pb + root ) * 0.5, ( pb - root ) * 0.5 } )
 		{
 			const cd z = ( k + s ) / ( k - s );
-			if( z.imag() <= 0.0 || sections >= 3 )
+			if( z.imag() <= 0.0 || sections >= kMaxOrder )
 				continue;   // the conjugate builds the same section
 			Section& q = sec[ sections ];
 			q.a1 = -2.0 * z.real();
@@ -74,6 +74,34 @@ void ThirdOctaveBank::BandFilter::design( double fm, double fs, int order, bool 
 	clear();
 }
 
+int ThirdOctaveBank::orderFor( double fm, double fs, double G, bool prewarp ) noexcept
+{
+	// The analog prototype the design will use.
+	const double loHz = fm * std::pow( G, -1.0 / 6.0 ), hiHz = fm * std::pow( G, 1.0 / 6.0 );
+	auto analog = [ & ]( double f ) { return prewarp ? std::tan( dsp::kPi * f / fs ) : dsp::kPi * f / fs; };
+	const double w1 = analog( loHz ), w2 = analog( hiHz );
+	const double w0 = std::sqrt( w1 * w2 ), B = w2 - w1;
+	// IEC 61260 class 1 minimum attenuation at the octave breakpoints G^1..G^4,
+	// mapped to a third octave (see estest's CheckThirds.cpp for the source).
+	const double ratio  = ( std::pow( G, 1.0 / 6.0 ) - 1.0 ) / ( std::pow( G, 0.5 ) - 1.0 );
+	const double need[] = { 17.5, 42.0, 61.0, 70.0 };
+	int order = 3;
+	for( int x = 1; x <= 4; ++x )
+	{
+		const double om = 1.0 + ratio * ( std::pow( G, (double)x ) - 1.0 );
+		for( double f : { fm / om, fm * om } )
+		{
+			if( f >= 0.5 * fs )
+				continue;   // above Nyquist: the transform's zero at Nyquist covers it
+			const double w = analog( f );
+			const double X = std::fabs( w / w0 - w0 / w ) * w0 / B;
+			while( order < kMaxOrder && 10.0 * std::log10( 1.0 + std::pow( X, 2.0 * order ) ) < need[ x - 1 ] + 1.0 )
+				++order;
+		}
+	}
+	return order;
+}
+
 void ThirdOctaveBank::BandFilter::clear() noexcept
 {
 	for( Section& s : sec )
@@ -85,14 +113,14 @@ void ThirdOctaveBank::setRate( int fs, const testing::Mutations& mut ) noexcept
 	fs_ = fs;
 	count_ = 0;
 	const double G     = mut.thirdBase2 ? 2.0 : std::pow( 10.0, 0.3 );
-	const int    order = mut.thirdOrder2 ? 2 : 3;
 	for( int i = 0; i < kMaxThirds; ++i )
 	{
 		const int    x  = kFirstX + i;
 		const double fm = mut.thirdBase2 ? 1000.0 * std::pow( 2.0, x / 3.0 ) : 1000.0 * std::pow( 10.0, x / 10.0 );
 		if( fm * std::pow( G, 1.0 / 6.0 ) >= kTopEdge * 0.5 * fs )
 			break;
-		BandFilter& b = bands_[ count_ ];
+		BandFilter& b     = bands_[ count_ ];
+		const int   order = mut.thirdOrder2 ? 2 : ( mut.thirdFixedOrder ? 3 : orderFor( fm, (double)fs, G, !mut.thirdNoPrewarp ) );
 		b.design( fm, (double)fs, order, !mut.thirdNoPrewarp, G );
 		b.nominalHz = nominalFor( x );
 		++count_;
