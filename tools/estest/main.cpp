@@ -38,7 +38,7 @@ struct Options
 	double                  live = 0.0;
 	std::string             device = earshot::kDefaultDevice;
 	std::string             file;
-	double                  expectBpm = 0.0, from = 6.0;
+	double                  expectBpm = 0.0, from = 6.0, fps = 60.0;
 	std::string             writeWav;
 	std::string             only;   ///< --negative: run just the mutations whose names contain this
 	std::string             with;   ///< run the groups with one negative case's mutation set
@@ -170,8 +170,8 @@ int runFile( const Options& o )
 		std::fprintf( stderr, "estest: %s\n", err.c_str() );
 		return 2;
 	}
-	std::printf( "%s: %d Hz, %d ch, %.2f s\n", o.file.c_str(), s.fs, s.channels, s.seconds() );
-	Run run{ s.fs, 512, 60.0 };
+	std::printf( "%s: %d Hz, %d ch, %.2f s, update at %.0f fps\n", o.file.c_str(), s.fs, s.channels, s.seconds(), o.fps );
+	Run run{ s.fs, 512, o.fps };
 	Driver d( run );
 	double settledAt = -1.0, lastBpm = 0.0, worst = 0.0;
 	int    onsets[ earshot::kMaxBands ] = {};
@@ -283,7 +283,7 @@ int runLive( const Options& o )
 void usage()
 {
 	std::printf( "usage: estest [--GROUP ...] [--rate HZ] [--block N] [--negative [--only NAME]] [--with MUTATION] [--perf]\n"
-				 "              [--file WAV [--expect-bpm BPM] [--from S]] [--write-wav PATH]\n"
+				 "              [--file WAV [--expect-bpm BPM] [--from S] [--fps N]] [--write-wav PATH]\n"
 				 "              [--devices] [--live SECONDS [--device NAME]]\n\ngroups:\n" );
 	for( const Group& g : groups() )
 		std::printf( "  --%-14s %s\n", g.name.c_str(), g.what.c_str() );
@@ -319,6 +319,8 @@ int main( int argc, char** argv )
 			o.file = next();
 		else if( a == "--expect-bpm" )
 			o.expectBpm = std::atof( next() );
+		else if( a == "--fps" )
+			o.fps = std::atof( next() );
 		else if( a == "--from" )
 			o.from = std::atof( next() );
 		else if( a == "--write-wav" )
