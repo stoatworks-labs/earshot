@@ -4,16 +4,20 @@ The command reference is `CLAUDE.md`. This file is the reasoning: the
 decisions, what was measured to make them, and the traps. Read it before you
 change a detector, a constant, or a tolerance in `estest`.
 
-Status, 2026-11-16: a local library repo (`~/dev/earshot`), intended home
-`github.com/stoatworks-labs/earshot`, never pushed. No plugin uses it yet.
-Everything below was measured by `estest` on synthetic signals on one Apple
-Silicon Mac (macOS 26.4), plus pattern's release-video soundtrack for the
-tempo. **MSVC has never compiled it**, and **live capture has never been
-exercised**, from a host or otherwise: the miniaudio backend has enumerated
-this Mac's 11 capture devices (`estest --devices`, names, channel counts and
-distinct keys, no stream opened) and has never opened a stream. Everything
-about the device worker was checked against a scripted backend that stands
-in for the OS.
+Status, 2026-11-18: public at `github.com/stoatworks-labs/earshot` (it was a
+local repo, `~/dev/earshot`, until then), with no tags or releases: plugins
+vendor a commit as a snapshot, so `main`'s history is never rewritten
+(needle and five plugins awaiting release cite `8124191`). No released
+plugin ships it yet. Everything below was measured by `estest` on synthetic
+signals on one Apple Silicon Mac (macOS 26.4), plus pattern's release-video
+soundtrack for the tempo; CI (`.github/workflows/ci.yml`) runs the same
+harness, negatives included, on Windows x64 under MSVC, on an Intel Mac and
+on an arm64 Mac, and all of it passed on the first run (2026-11-18, run
+44225830323). **Live capture has never been exercised**, from a host or
+otherwise: the miniaudio backend has enumerated this Mac's 11 capture
+devices (`estest --devices`, names, channel counts and distinct keys, no
+stream opened) and has never opened a stream. Everything about the device
+worker was checked against a scripted backend that stands in for the OS.
 
 ## What it is for
 
@@ -269,9 +273,20 @@ the check in `tools/estest/Check*.cpp`. The kinds:
 - **update() cost**: mean 0.6 ms on this Mac for a 60 fps frame of 48 kHz
   stereo with everything on; one run on a loaded machine saw a 5.3 ms frame.
   The tempo detection runs once per audio second (~1 ms).
-- MSVC never compiled. The code avoids the known traps (no M_PI, no VLAs, no
-  GCC attributes outside the consumer test, `/utf-8 /permissive-` set), but
-  that is a statement of intent, not a result.
+- MSVC: needle's Windows CI first compiled the library (needle `e512e2b`), and
+  this repo's CI builds the library at `/W4 /permissive-` and the harness with
+  no warnings, and passes every check, negative control and the consumer DLL
+  on windows-2022. What avoided the known traps: no M_PI (src/Dsp.h's own
+  constants), no VLAs, no GCC attributes outside the consumer test, `/utf-8`,
+  `NOMINMAX`, and no `<windows.h>` in any file that names a variable `far`
+  (tools/estest/CheckOnsets.cpp has one). No Windows device has ever been
+  listed or opened: the runner's `estest --devices` lists none, and
+  `listDevices()` returns an empty list whether the context failed or there
+  are no inputs, so that proves nothing about WASAPI.
+- The macOS arm64 runner lists two capture devices of its own ("Apple Virtual
+  Sound Device", the default, and "Null Audio Device"); CI only enumerates
+  them. They are a possible place for a live-capture test that needs no
+  microphone; nothing uses them yet.
 
 ## Negative controls and the mutation test
 

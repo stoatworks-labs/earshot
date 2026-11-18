@@ -93,9 +93,10 @@ jobs:
           echo "  ok: exports $exports"
 
       - name: Capture devices (enumerate only, informational)
-        # Lists what miniaudio's CoreAudio backend sees and opens nothing. A
-        # runner has no microphone, so an empty list is the expected answer;
-        # this step is here to show the backend starts, not to judge it.
+        # Lists what miniaudio's CoreAudio backend sees and opens nothing. The
+        # runner has no microphone but does list two virtual devices ("Apple
+        # Virtual Sound Device", "Null Audio Device"). Informational: it judges
+        # nothing, and listDevices() is silent about failing.
         run: ./build/tools/estest/estest --devices || true
 
   macos-x86_64:
@@ -162,8 +163,10 @@ jobs:
           ./build-consumer/Release/consumer-host.exe
 
       - name: Capture devices (enumerate only, informational)
-        # WASAPI through miniaudio, built by MSVC. A runner has no audio
-        # input, so an empty list is expected; this shows the backend starts.
+        # WASAPI through miniaudio, built by MSVC. The runner lists no input,
+        # and an empty list cannot tell "no inputs" from "the backend did not
+        # start" (listDevices() is silent about failing), so this judges
+        # nothing; it is a record of what the runner offered.
         shell: bash
         run: ./build/tools/estest/Release/estest.exe --devices || true
 

@@ -17,8 +17,9 @@
 > only at one sample rate, a statistical effect; one, for tempo, fails four
 > of the five grooves but never the shuffle); fifteen further planted bugs
 > are all caught.
-> **No plugin uses it yet. It has never opened a live audio device**, from a
-> host or anywhere else, and **it has never been compiled with MSVC**.
+> **It has never opened a live audio device**, from a host or anywhere else,
+> and no released plugin ships it yet. The same harness passes in CI on
+> Windows x64 under MSVC and on Intel macOS, as on Apple Silicon.
 
 A shared live-audio front end for the Stoatworks FFGL plugins. One C++17
 library, pulled into a plugin with one `add_subdirectory`, that opens its own
@@ -74,10 +75,26 @@ add_subdirectory( external/earshot )
 target_link_libraries( MyPlugin PRIVATE earshot::earshot )
 ```
 
+## Used by
+
+Each of these vendors earshot as an unpatched snapshot of one commit in
+`external/earshot/`, with a `SNAPSHOT` file naming it
+([docs/INTEGRATING.md](docs/INTEGRATING.md), "Taking a snapshot"). All of
+them took `8124191`.
+
+- [needle](https://github.com/stoatworks-labs/needle): its VFD spectrum
+  display, a third-octave bank of earshot's. On needle's `main` since
+  2026-11-16, not yet in a release.
+- woofer, eidophone, rubens, marbling and snowglobe: plugins built on it and
+  about to be released, each to its own public repo.
+
+There are no tags and no releases here: a plugin takes a commit, so `main`'s
+history is never rewritten.
+
 ## Status
 
-**2026-11-16: a library with a harness, and no user yet.** Local repository;
-intended home `github.com/stoatworks-labs/earshot`.
+**2026-11-18: public, a library with a harness, vendored by six plugins and
+shipped in none yet.**
 
 Verified by measurement on one Apple Silicon Mac (macOS 26.4), every check in
 four cells (44.1 and 48 kHz, blocks of 128 and 1031 samples, 60 fps), with
@@ -122,14 +139,34 @@ and again built without fused multiply-add):
 - **No allocation** in `feed()`, `update()`, `readTap()` or the device
   callback.
 
+And in CI (`.github/workflows/ci.yml`), on every push and pull request, first
+green on 2026-11-18 ([run 44225830323](https://github.com/stoatworks-labs/earshot/actions/runs/44225830323)):
+
+- **Windows x64, MSVC** (windows-2022): the library at `/W4 /permissive-`
+  and the harness build with no warnings; estest 238 of 238 in every cell,
+  the negative controls 51 of 51 with coverage 65 of 65, the WAV round trip,
+  and the consumer built as a DLL, loaded by a host and pitching 440 Hz.
+- **macOS x86_64** on an Intel runner (macos-15-intel), natively rather than
+  under Rosetta: estest 238 of 238 and the consumer.
+- **macOS arm64** (macos-15): the universal build with both slices, estest,
+  the negative controls, `EARSHOT_CAPTURE=OFF`, and the consumer exporting
+  its one symbol and nothing of earshot's.
+
+The runners open no audio device. The mutation test, the build without fused
+multiply-add and the soundtrack tempo run only in `tools/verify.sh`.
+
 Not verified:
 
 - **It has never opened a live device.** The miniaudio backend has listed
   this Mac's 11 capture devices and nothing more; `estest --live` exists and
   has not been run.
-- **No plugin uses it**, so it has never run inside Resolume.
-- **MSVC has never compiled it.** It is written to be portable; that is
-  intent, not a result.
+- **It has never run inside Resolume.** Six plugins vendor it, and none of
+  them had been loaded into Resolume with earshot in it as of 2026-11-18
+  (each plugin's README says what its own release found).
+- **Capture on Windows.** MSVC builds the WASAPI backend, but no Windows
+  device has ever been listed or opened. On the CI runner `estest --devices`
+  lists none, and an empty list does not say whether the backend started
+  (enumeration is silent about failing).
 - Everything is synthetic audio except one real track (the tempo).
 
 ## Building and testing
@@ -139,6 +176,14 @@ cmake -S . -B build -DCMAKE_OSX_ARCHITECTURES=arm64
 cmake --build build -j4
 build/tools/estest/estest          # every check, every cell, about a minute
 tools/verify.sh                    # everything, about ten minutes
+```
+
+On Windows, with Visual Studio's CMake:
+
+```
+cmake -S . -B build -A x64
+cmake --build build --config Release
+build\tools\estest\Release\estest.exe
 ```
 
 `CLAUDE.md` is the command reference; `AGENTS.md` is why everything is the
