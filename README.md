@@ -146,6 +146,6 @@ way it is, and the traps.
 
 ## Licence
 
-MIT, copyright Stoatworks. miniaudio (vendored) is public domain or MIT-0.
+MIT, copyright Stoatworks Labs. miniaudio (vendored) is public domain or MIT-0.
 spasis and pattern, which much of this comes from, are MIT. See
 [ATTRIBUTIONS.md](ATTRIBUTIONS.md).

@@ -4,7 +4,7 @@ A shared live-audio front end for the Stoatworks FFGL plugins: one C++17
 static library (`earshot`, alias `earshot::earshot`) that a plugin pulls in
 with `add_subdirectory`. Own capture (miniaudio, from spasis), a Resolume-FFT
 fallback, and pitch, partials, onsets, band envelopes, a third-octave bank,
-tempo, stereo and a waveform tap. MIT, copyright Stoatworks. Local repo at
+tempo, stereo and a waveform tap. MIT, copyright Stoatworks Labs. Local repo at
 `~/dev/earshot`; intended home `github.com/stoatworks-labs/earshot`; never
 pushed. No plugin uses it yet.
 
