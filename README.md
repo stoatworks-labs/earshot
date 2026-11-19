@@ -85,31 +85,40 @@ target_link_libraries( MyPlugin PRIVATE earshot::earshot )
 Each of these vendors earshot as an unpatched snapshot of one commit in
 `external/earshot/`, with a `SNAPSHOT` file naming it
 ([docs/INTEGRATING.md](docs/INTEGRATING.md), "Taking a snapshot"). As of
-2026-11-19, snowglobe v0.1.1 ships `02306da`; every other one ships `8124191`
-in its latest release.
+2026-11-19, the five that read the host's FFT (woofer, rubens, marbling,
+snowglobe and eidophone) ship `02306da` in their v0.1.1 releases. needle,
+flyback and filament ship `8124191`: they take audio from a device only, and
+`02306da` changed nothing on that path.
 
 | Plugin | Release | Snapshot | What it reads from earshot |
 | --- | --- | --- | --- |
-| [woofer](https://github.com/stoatworks-labs/woofer) | v0.1.0 | `8124191` | four band levels on the host path, the tap on a device |
-| [rubens](https://github.com/stoatworks-labs/rubens) | v0.1.0 | `8124191` | four band levels |
-| [marbling](https://github.com/stoatworks-labs/marbling) | v0.1.0 | `8124191` | onsets in any of four bands |
+| [woofer](https://github.com/stoatworks-labs/woofer) | v0.1.1 | `02306da` | four band levels on the host path, the tap on a device |
+| [rubens](https://github.com/stoatworks-labs/rubens) | v0.1.1 | `02306da` | four band levels |
+| [marbling](https://github.com/stoatworks-labs/marbling) | v0.1.1 | `02306da` | onsets in any of four bands |
 | [snowglobe](https://github.com/stoatworks-labs/snowglobe) | v0.1.1 | `02306da` | band 0's onsets (Kick), with the host's sample rate |
-| [eidophone](https://github.com/stoatworks-labs/eidophone) | v0.1.0 | `8124191` | pitch and band envelopes on a device; on the host path only `HostBins`' default rate |
+| [eidophone](https://github.com/stoatworks-labs/eidophone) | v0.1.1 | `02306da` | pitch and band envelopes on a device; on the host path the host's sample rate, to find the loudest bin's frequency |
 | [needle](https://github.com/stoatworks-labs/needle) | v0.2.0 | `8124191` | third-octave bands on a device (the VFD) |
 | [flyback](https://github.com/stoatworks-labs/flyback) | v0.2.0 | `8124191` | pitch on a device |
 | [filament](https://github.com/stoatworks-labs/filament) | v0.2.0 | `8124191` | the tap on a device |
 
-`8124191` gives each host bin to the band holding its centre, at a 44.1 kHz
-default. Under it, on Arena's measured bins:
+`8124191` gave each host bin to the band holding its centre, at a 44.1 kHz
+default. Under it, on Arena's measured bins (all fixed in the v0.1.1
+releases, measured in Arena 7.29.0 on each release's own notarised bundle):
 
 - rubens', marbling's and snowglobe's 40-160 Hz band gets nothing.
   - snowglobe's Kick never fired (v0.1.0; v0.1.1 takes `02306da`, and in
     Arena 7.29.0 its Kick moved the globe in 69 of 69 snapshot pairs over
     `Beat 001.wav`, where v0.1.0 moved in none).
-  - rubens' lowest noise band is silent.
-  - marbling's band 0 never triggers, but a kick still triggers it through
-    band 1.
-- woofer's 20-200 Hz band gets all of 0-375 Hz.
+  - rubens' lowest noise band was silent (v0.1.1: an offline check built
+    the way Arena builds its bins drives the 40-160 Hz band with 10 of 10
+    kicks, against 0 of 10 on `8124191`).
+  - marbling's band 0 never triggered, but a kick still triggered it through
+    band 1 (v0.1.1: band 0 fires 128-176 times a 30-second window over
+    `Beat 001.wav`, where v0.1.0 fired none).
+- woofer's 20-200 Hz band got all of 0-375 Hz (v0.1.1: its share, 0.693 of
+  the bin, so the cone moves about 0.70 as far as v0.1.0's).
+- eidophone drove its plate 1.47 semitones flat (v0.1.1: a 1312.5 Hz tone
+  drives it at 1312.5 Hz, where v0.1.0 gave 1205.9 Hz).
 - The Log choice in woofer's and rubens' `FFT Law` maps bins to the wrong
   frequencies on Arena.
 
@@ -122,7 +131,8 @@ history is never rewritten.
 
 **2026-11-19: public, a library with a harness, shipped in eight plugins'
 releases. The host fallback was measured against Arena and fixed in 0.1.1
-(`02306da`), which snowglobe v0.1.1 ships; the other seven are at
+(`02306da`), which woofer, rubens, marbling, snowglobe and eidophone v0.1.1
+ship; needle, flyback and filament, which read only a device, are at
 `8124191`.**
 
 Verified by measurement on one Apple Silicon Mac (macOS 26.4), every check in

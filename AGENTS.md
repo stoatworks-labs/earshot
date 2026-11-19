@@ -7,7 +7,7 @@ change a detector, a constant, or a tolerance in `estest`.
 Status, 2026-11-19: public at `github.com/stoatworks-labs/earshot` (it was a
 local repo, `~/dev/earshot`, until then), with no tags or releases: plugins
 vendor a commit as a snapshot, so `main`'s history is never rewritten
-(eight plugins cite `8124191`; README, "Used by"). On 2026-11-19 the host
+(five plugins cite `02306da` and three `8124191`; README, "Used by"). On 2026-11-19 the host
 bins Arena sends were measured (below), and the fallback stopped leaving a
 band empty: version 0.1.1. Everything below was measured by `estest` on synthetic
 signals on one Apple Silicon Mac (macOS 26.4), plus pattern's release-video
