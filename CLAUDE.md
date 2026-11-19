@@ -9,8 +9,9 @@ tempo, stereo and a waveform tap. MIT, copyright Stoatworks Labs. Public at
 `~/Projects/resolume/earshot`; it lived at `~/dev/earshot` before that). No
 tags and no releases: a plugin vendors one commit as a snapshot
 (`docs/INTEGRATING.md`, "Taking a snapshot"), so never rewrite `main`'s
-history, which the plugins' `SNAPSHOT` files cite. Used by needle (main) and
-five plugins awaiting release; README, "Used by".
+history, which the plugins' `SNAPSHOT` files cite. Eight plugins ship
+`8124191` in their releases; README, "Used by". The host-bin law defaults
+are Arena's, measured (AGENTS.md, "Resolume's 64 bins, measured").
 
 Read `AGENTS.md` before changing a detector, a constant, or any tolerance in
 `estest`. The plugin author's guide is `docs/INTEGRATING.md`.

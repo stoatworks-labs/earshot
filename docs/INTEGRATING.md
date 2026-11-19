@@ -150,10 +150,25 @@ counts, in fixed buffers (it never allocates).
 On the host fallback (`Source::Host`), only band envelopes and onsets
 exist. Pitch, partials, thirds, tempo, stereo and the tap are empty
 (`valid` false, counts 0), on purpose: draw nothing rather than a guess.
-The host bins' law is an assumption you should expose as parameters
-(`Config::hostBins`: Magnitude or Power, Linear or Log, and the sample
-rate). Under the Linear law at 44.1 kHz the lowest band (30-150 Hz) gets no
-bin at all: 64 linear bins start at 172 Hz.
+
+The host bins' law is `Config::hostBins`. The defaults are what Arena 7.29.0
+was measured to send on a Mac (2026-11-19; AGENTS.md, "Resolume's 64 bins,
+measured"): Magnitude, Linear, and 48 kHz. That gives 64 bins of 375 Hz from
+0 to 24 kHz.
+
+- **The axis follows the host's audio engine rate**, not the clip's. Set
+  `hostBins.sampleRate` from FFGL `SetSampleRate` (CFFGLPlugin's
+  `sampleRate`) when the host sends one.
+- **Keep the law a parameter if you already expose one.** One host on one
+  machine is measured, not every host.
+- **A bin is shared between the bands it overlaps**, in proportion to the
+  overlap, so no band is left empty. Bin 0 holds everything from 0 to
+  375 Hz, kick and bass together.
+  - A 40-160 Hz band gets 0.32 of bin 0's energy.
+  - It gets a matching share of bin 0's level and of its rise.
+- earshot `8124191` and earlier gave each bin to the band that holds its
+  centre (172 Hz at the old 44.1 kHz default). A band narrower than a bin,
+  or one below bin 0's centre, got nothing. Take a newer snapshot.
 
 ## Results worth knowing about
 
