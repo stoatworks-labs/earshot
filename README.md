@@ -85,14 +85,15 @@ target_link_libraries( MyPlugin PRIVATE earshot::earshot )
 Each of these vendors earshot as an unpatched snapshot of one commit in
 `external/earshot/`, with a `SNAPSHOT` file naming it
 ([docs/INTEGRATING.md](docs/INTEGRATING.md), "Taking a snapshot"). As of
-2026-11-19, every one of them ships `8124191` in its latest release.
+2026-11-19, snowglobe v0.1.1 ships `02306da`; every other one ships `8124191`
+in its latest release.
 
 | Plugin | Release | Snapshot | What it reads from earshot |
 | --- | --- | --- | --- |
 | [woofer](https://github.com/stoatworks-labs/woofer) | v0.1.0 | `8124191` | four band levels on the host path, the tap on a device |
 | [rubens](https://github.com/stoatworks-labs/rubens) | v0.1.0 | `8124191` | four band levels |
 | [marbling](https://github.com/stoatworks-labs/marbling) | v0.1.0 | `8124191` | onsets in any of four bands |
-| [snowglobe](https://github.com/stoatworks-labs/snowglobe) | v0.1.0 | `8124191` | band 0's onsets (Kick) |
+| [snowglobe](https://github.com/stoatworks-labs/snowglobe) | v0.1.1 | `02306da` | band 0's onsets (Kick), with the host's sample rate |
 | [eidophone](https://github.com/stoatworks-labs/eidophone) | v0.1.0 | `8124191` | pitch and band envelopes on a device; on the host path only `HostBins`' default rate |
 | [needle](https://github.com/stoatworks-labs/needle) | v0.2.0 | `8124191` | third-octave bands on a device (the VFD) |
 | [flyback](https://github.com/stoatworks-labs/flyback) | v0.2.0 | `8124191` | pitch on a device |
@@ -102,7 +103,9 @@ Each of these vendors earshot as an unpatched snapshot of one commit in
 default. Under it, on Arena's measured bins:
 
 - rubens', marbling's and snowglobe's 40-160 Hz band gets nothing.
-  - snowglobe's Kick never fires.
+  - snowglobe's Kick never fired (v0.1.0; v0.1.1 takes `02306da`, and in
+    Arena 7.29.0 its Kick moved the globe in 69 of 69 snapshot pairs over
+    `Beat 001.wav`, where v0.1.0 moved in none).
   - rubens' lowest noise band is silent.
   - marbling's band 0 never triggers, but a kick still triggers it through
     band 1.
@@ -118,8 +121,9 @@ history is never rewritten.
 ## Status
 
 **2026-11-19: public, a library with a harness, shipped in eight plugins'
-releases, all at `8124191`. The host fallback was measured against Arena
-and fixed in 0.1.1.**
+releases. The host fallback was measured against Arena and fixed in 0.1.1
+(`02306da`), which snowglobe v0.1.1 ships; the other seven are at
+`8124191`.**
 
 Verified by measurement on one Apple Silicon Mac (macOS 26.4), every check in
 four cells (44.1 and 48 kHz, blocks of 128 and 1031 samples, 60 fps), with
@@ -178,7 +182,9 @@ and again built without fused multiply-add):
   - **Timing:** a new spectrum about every 43 ms, held in between.
 
 And in CI (`.github/workflows/ci.yml`), on every push and pull request, first
-green on 2026-11-18 ([run 44225830323](https://github.com/stoatworks-labs/earshot/actions/runs/44225830323)):
+green on 2026-11-18 ([run 44225830323](https://github.com/stoatworks-labs/earshot/actions/runs/44225830323)),
+and for 0.1.1 on 2026-11-19 ([run 44553615013](https://github.com/stoatworks-labs/earshot/actions/runs/44553615013)
+on the branch, [run 44558301008](https://github.com/stoatworks-labs/earshot/actions/runs/44558301008) on `main`):
 
 - **Windows x64, MSVC** (windows-2022): the library at `/W4 /permissive-`
   and the harness build with no warnings; estest 254 of 254 in every cell
